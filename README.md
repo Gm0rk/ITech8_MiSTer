@@ -3,14 +3,14 @@
 A work-in-progress FPGA core for Incredible Technologies' (Strata) **8-bit
 blitter** arcade hardware, for the [MiSTer](https://github.com/MiSTer-devel)
 platform. It is built on `Template_MiSTer` with rmonic79's CRT Adjust built
-in. The first game is **Ninja Clowns** (1991).
+in. **Ninja Clowns** (1991) boots and is playable.
 
-> **This core was made with AI.** The RTL, testbenches and documentation
-> were written in collaboration with an AI assistant (Claude, by Anthropic).
+> **This core was made with AI.** The RTL and documentation were written in
+> collaboration with an AI assistant (Claude, by Anthropic).
 > It worked from MAME's source and from a disassembly of the game's own
-> program ROMs. Every block was checked in simulation on the real ROMs.
-> Hardware testing has only just started. This is disclosed here so you can
-> make your decision to use this core accordingly.
+> program ROMs. Ninja Clowns has been tested and played on a DE10-Nano. This
+> is disclosed here so you can make your decision to use this core
+> accordingly.
 
 ## Games
 
@@ -20,7 +20,7 @@ board, which is not started.
 
 | Game | Year | Main CPU | Status |
 |---|---|---|---|
-| **Ninja Clowns** | 1991 | 68000 | **In progress.** Runs in simulation from power-on to gameplay. On hardware, build 001 reached the self-test, then went black (NVRAM); build 003 has the fix and is next to test. |
+| **Ninja Clowns** | 1991 | 68000 | **Fully playable, with sound** |
 | Arlington Horse Racing | 1991 | 6809 | Not started |
 | Dyno Bop | 1990 | 6809, Z80 ball sensors | Not started |
 | Golden Par Golf | 1992 | 6809 | Not started |
@@ -39,11 +39,9 @@ board, which is not started.
 
 ## Progress
 
-Current build: **003**.
-
 ```
-Simulation  [##########] 10/10 board sections
-Hardware    [######----]  6/10 seen working in the self-test (build 001); blocked by NVRAM
+Ninja Clowns board  [##########]  10/10 sections working on hardware
+Games               [#---------]  1/16 playable
 ```
 
 The ten board sections are the 68000 and memory map, SDRAM and ROM loader,
@@ -61,7 +59,6 @@ video path. Design choices and their reasons are in `DECISIONS.md`.
 | Display | 362 × 240, 15.686 kHz, 59.64 Hz |
 | Memory | 2 MB of SDRAM (any MiSTer SDRAM module); 16 KB NVRAM saved to the SD card |
 | CRT Adjust | H-Size, H-Position and V-Shift on the analog output at 15 kHz |
-| Builds | production, and a debug build with an on-screen diagnostic overlay |
 
 ## Using the core
 
@@ -72,8 +69,7 @@ ROMs are not included. Copy:
 * the MAME ROM set `ninclown.zip` to `games/mame/`
 
 Keep only one ITech8 core in `_Arcade/cores/`: MiSTer loads the matching file
-whose name sorts last, so a debug build or an older `ITech8.rbf` left there
-would load instead.
+whose name sorts last.
 
 **Controls:** stick, Punch (A), Kick (B), Throw (X), Start, Coin (R),
 Service (L), the same for both players. **OSD:** aspect ratio, scandoubler
@@ -82,14 +78,7 @@ Service Mode (opens the game's service menu) and Reset.
 
 **NVRAM** (settings, audits and high scores) is saved when the OSD opens, to
 `config/nvram/Ninja Clowns (27 oct 91).nvm`. Delete that file to return the
-game to its factory settings. If you ran build 001, delete it before using a
-later build.
-
-## Building
-
-Quartus Prime 17.0. Open `Arcade-ITech8.qpf` for the production build or
-`Arcade-ITech8_debug.qpf` for the debug build (OSD → Debug → Diagnostic
-overlay). The MiSTer framework in `sys/` is unmodified.
+game to its factory settings.
 
 ## Credits and references
 
