@@ -1,0 +1,65 @@
+# ===========================================================================
+#  files.qip -- Incredible Technologies 8-bit hardware for MiSTer
+#
+#  Sourced by Arcade-ITech8.qsf (and the debug revision), not added as a
+#  QIP_FILE, so every path is relative to the project root.
+#
+#  rtl/ is organised by section of the board set:
+#
+#      board/      main board: top level, clock enables, battery-backed RAM
+#      video/      TMS34061, VRAM, ITV4400 blitter, RAMDAC, display path
+#      sound/      the external YM3812 sound board: 6809 glue, 6522 VIA
+#      mem/        FPGA side only: block RAM templates, SDRAM, ROM loader
+#      debug/      the diagnostic overlay (debug revision)
+#
+#  Third-party code (fx68k, mc6809, jtopl, jt6295, CRT Adjust) is under rtl/,
+#  each in its own folder with its licence.
+# ===========================================================================
+
+# --- Timing constraints ----------------------------------------------------
+set_global_assignment -name SDC_FILE Arcade-ITech8.sdc
+
+# --- FPGA-side memory ------------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/it8_ram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/it8_sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/it8_loader.sv
+
+# --- Main board ------------------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_ce.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_nvram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_top.sv
+
+# --- Video: TMS34061, VRAM, blitter, RAMDAC --------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_tms34061.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_vram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_blitter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_ramdac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_video.sv
+
+# --- Sound board -----------------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_via6522.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_sound.sv
+
+# --- Diagnostic overlay ----------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_text.sv
+
+# --- CRT Adjust (rmonic79), core-side --------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/crt/crt_adjust.sv
+
+# --- Core top level --------------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE Arcade-ITech8.sv
+
+# --- Third-party cores -----------------------------------------------------
+# fx68k -- 68000, Jorge Cwik. microrom.mem / nanorom.mem stay beside fx68k.sv.
+set_global_assignment -name QIP_FILE rtl/fx68k/fx68k.qip
+
+# mc6809is -- synchronous 6809, Greg Miller (cavnex), sync version by
+# Sorgelig, reset-interrupt fix by RndMnkIII.
+set_global_assignment -name VERILOG_FILE rtl/mc6809/mc6809is.v
+
+# jtopl2 -- YM3812, and jt6295 -- OKI M6295, both Jose Tejada (jotego)
+set_global_assignment -name QIP_FILE rtl/jtopl/hdl/jtopl2.qip
+set_global_assignment -name QIP_FILE rtl/jt6295/hdl/jt6295.qip
+
+# --- PLL --------------------------------------------------------------------
+# rtl/pll.qip (48 MHz clk_sys, 96 MHz clk_vid) is added by sys/pll_q17.qip.

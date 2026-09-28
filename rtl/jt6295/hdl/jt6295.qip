@@ -1,0 +1,15 @@
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295.v            ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_adpcm.v      ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_timing.v     ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_acc.v        ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_ctrl.v       ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_rom.v        ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_serial.v     ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt6295_sh_rst.v     ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt12_interpol.v     ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt12_comb.v         ]
+# jtframe_fir_mono is only used with INTERPOL != 0. This core builds jt6295
+# with INTERPOL = 0, so the JTFRAME file is not needed and stays disabled.
+#set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) ../../jtframe/hdl/sound/jtframe_fir_mono.v         ]
+
+
