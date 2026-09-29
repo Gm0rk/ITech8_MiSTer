@@ -4,6 +4,8 @@
 //
 //  Every clock on the Ninja Clowns board set divides 48 MHz exactly, so a
 //  single modulo-48 counter produces all of them in a fixed phase relation.
+//  vid6_ce is the 6 MHz dot and character clock of the 6809 boards (12 MHz
+//  crystal / 2; one VRAM byte per dot).
 //  The SDRAM controller relies on that: it lines its command slots up with
 //  cpu_ph so that 68000 ROM reads never wait (see it8_sdram.sv).
 //
@@ -25,7 +27,8 @@ module it8_ce
 	output reg       snd_fall_q,  // 6809 Q falling edge, 1/4 cycle before E
 	output reg       ym_cen,      // 4 MHz YM3812 master clock (8 MHz / 2)
 	output reg       oki_cen,     // 1 MHz OKI M6295 clock (8 MHz / 8)
-	output reg       blt_tick     // 3 MHz blitter timing tick (12 MHz / 4)
+	output reg       blt_tick,    // 3 MHz blitter timing tick (12 MHz / 4)
+	output reg       vid6_ce      // 6 MHz dot clock of the 6809 boards
 );
 
 reg  [5:0] cnt;
@@ -47,6 +50,7 @@ always @(posedge clk) begin
 		ym_cen     <= 1'b0;
 		oki_cen    <= 1'b0;
 		blt_tick   <= 1'b0;
+		vid6_ce    <= 1'b0;
 	end
 	else begin
 		cnt        <= nxt;
@@ -61,6 +65,7 @@ always @(posedge clk) begin
 		snd_fall_q <= (nxt % 24) == 18;
 		oki_cen    <= (nxt == 6'd0);
 		blt_tick   <= (nxt % 16) == 0;
+		vid6_ce    <= (nxt % 8)  == 0;
 	end
 end
 
