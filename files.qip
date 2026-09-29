@@ -6,14 +6,18 @@
 #
 #  rtl/ is organised by section of the board set:
 #
-#      board/      main board: top level, clock enables, battery-backed RAM
+#      board/      main board: top level, clock enables, battery-backed RAM,
+#                  the 6809 main CPU of the 6809 boards (Strata Bowling)
 #      video/      TMS34061, VRAM, ITV4400 blitter, RAMDAC, display path
 #      sound/      the external YM3812 sound board: 6809 glue, 6522 VIA
 #      mem/        FPGA side only: block RAM templates, SDRAM, ROM loader
 #      debug/      the diagnostic overlay (debug revision)
+#      cb/         the earlier Capcom Bowling board (also Coors Light
+#                  Bowling and Bowl-O-Rama): main board, video, sound board,
+#                  trackball
 #
-#  Third-party code (fx68k, mc6809, jtopl, jt6295, CRT Adjust) is under rtl/,
-#  each in its own folder with its licence.
+#  Third-party code (fx68k, mc6809, jtopl, jt6295, jt12/jt03, CRT Adjust) is
+#  under rtl/, each in its own folder with its licence.
 # ===========================================================================
 
 # --- Timing constraints ----------------------------------------------------
@@ -27,6 +31,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/it8_loader.sv
 # --- Main board ------------------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_ce.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_nvram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_main09.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_top.sv
 
 # --- Video: TMS34061, VRAM, blitter, RAMDAC --------------------------------
@@ -39,6 +44,12 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_video.sv
 # --- Sound board -----------------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_via6522.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_sound.sv
+
+# --- Capcom Bowling board --------------------------------------------------
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_sound.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_trackball.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_top.sv
 
 # --- Diagnostic overlay ----------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_text.sv
@@ -60,6 +71,9 @@ set_global_assignment -name VERILOG_FILE rtl/mc6809/mc6809is.v
 # jtopl2 -- YM3812, and jt6295 -- OKI M6295, both Jose Tejada (jotego)
 set_global_assignment -name QIP_FILE rtl/jtopl/hdl/jtopl2.qip
 set_global_assignment -name QIP_FILE rtl/jt6295/hdl/jt6295.qip
+
+# jt03 -- YM2203 (with jt49 for its SSG), Jose Tejada (jotego)
+set_global_assignment -name QIP_FILE rtl/jt12/jt03.qip
 
 # --- PLL --------------------------------------------------------------------
 # rtl/pll.qip (48 MHz clk_sys, 96 MHz clk_vid) is added by sys/pll_q17.qip.
