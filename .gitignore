@@ -45,9 +45,9 @@ c5_pin_model_dump.txt
 # so they match only at the project root (sys/build_id.tcl must stay).
 # ---------------------------------------------------------------------------
 /HANDOFF.md
-/PROGRESS.md
 /BUILD.md
 /DECISIONS.md
+/COMMIT.md
 /sim/
 __pycache__/
 *.pyc
