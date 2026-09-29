@@ -47,6 +47,7 @@ c5_pin_model_dump.txt
 /HANDOFF.md
 /PROGRESS.md
 /BUILD.md
+/DECISIONS.md
 /sim/
 __pycache__/
 *.pyc
