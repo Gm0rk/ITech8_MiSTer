@@ -1,7 +1,7 @@
 <misterromdescription>
-    <name>Strata Bowling (V3)</name>
-    <setname>stratab</setname>
-    <rbf>Arcade-ITech8</rbf>
+    <name>Strata Bowling (V1) (debug)</name>
+    <setname>stratab1</setname>
+    <rbf>Arcade-ITech8_debug</rbf>
     <mameversion>0289</mameversion>
     <mratimestamp>20260929</mratimestamp>
     <year>1990</year>
@@ -27,11 +27,11 @@ Download stream (ioctl index 0), 1,146,880 bytes:
         <part>C3</part>
     </rom>
 
-    <rom index="0" zip="stratab.zip" md5="2fb62431c335e1d8860b85c4de8f6925">
+    <rom index="0" zip="stratab1.zip|stratab.zip" md5="a14828cab3ed305530650d2c5d11f025">
         <!-- sound program (sound CPU $8000-$FFFF) -->
         <part name="sb_snds_u27.u27" crc="b36c8f0a"/>
         <!-- main program (CPU $8000-$FFFF; banks at $4000) -->
-        <part name="sb_prog_v3_u5.u5" crc="a5ae728f"/>
+        <part name="sb_prog_v1_u5.u5" crc="46d51604"/>
         <part repeat="0x8000">00</part>
         <!-- OKI M6295 samples -->
         <part name="sb_srom0.srom0" crc="6ff390b9"/>

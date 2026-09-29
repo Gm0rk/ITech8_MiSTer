@@ -1,10 +1,10 @@
 <misterromdescription>
-    <name>Coors Light Bowling</name>
-    <setname>clbowl</setname>
-    <rbf>Arcade-ITech8</rbf>
+    <name>Capcom Bowling (set 3) (debug)</name>
+    <setname>capbowl3</setname>
+    <rbf>Arcade-ITech8_debug</rbf>
     <mameversion>0289</mameversion>
     <mratimestamp>20260928</mratimestamp>
-    <year>1989</year>
+    <year>1988</year>
     <manufacturer>Incredible Technologies / Capcom</manufacturer>
     <category>Sports / Bowling</category>
     <players>2</players>
@@ -25,17 +25,17 @@ Download stream (ioctl index 0), 163,840 bytes:
         <part>01</part>
     </rom>
 
-    <rom index="0" zip="clbowl.zip|capbowl.zip" md5="4ec323544726f4536ccfb95f20ef3eca">
+    <rom index="0" zip="capbowl3.zip|capbowl.zip" md5="e7213bf0b5c14fb69ec167a9c464599e">
         <!-- program (CPU $8000-$FFFF) -->
-        <part name="coors_bowling_program.u6" crc="91e06bc4"/>
+        <part name="3.0_bowl.u6" crc="32e30928"/>
         <!-- graphics ROM GR0 -->
-        <part name="coors_bowling_grom0.gr0" crc="899c8f15"/>
+        <part name="grom0-gr0.gr0" crc="2b5eb091"/>
         <!-- graphics ROM GR1 -->
-        <part name="coors_bowling_grom1.gr1" crc="0ac0dc4c"/>
+        <part name="grom1-gr1.gr1" crc="880e4e1c"/>
         <!-- graphics ROM GR2 -->
-        <part name="coors_bowling_grom2.gr2" crc="251f5da5"/>
+        <part name="grom2-gr2.gr2" crc="f3d2468d"/>
         <!-- sound program -->
-        <part name="coors_bowling_sound.u30" crc="1eba501e"/>
+        <part name="sound_r-2_u30.u30" crc="43ac1658"/>
     </rom>
 
     <!-- 2 KB battery-backed RAM (CPU $5000-$57FF) -->

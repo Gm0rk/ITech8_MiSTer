@@ -1,7 +1,7 @@
 <misterromdescription>
-    <name>Strata Bowling (V3)</name>
+    <name>Strata Bowling (V3) (debug)</name>
     <setname>stratab</setname>
-    <rbf>Arcade-ITech8</rbf>
+    <rbf>Arcade-ITech8_debug</rbf>
     <mameversion>0289</mameversion>
     <mratimestamp>20260929</mratimestamp>
     <year>1990</year>
