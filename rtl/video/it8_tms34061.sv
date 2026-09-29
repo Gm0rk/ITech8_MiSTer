@@ -14,22 +14,32 @@
 //    4             shift register -> VRAM  destination row
 //    5             VRAM -> shift register  source row
 //
-//  Raster counters run on the 4 MHz character clock (two pixels). Counts go
-//  from 0 to the TOTAL registers inclusive; sync runs from 0 to END SYNC,
-//  and the display is visible from END BLANK up to START BLANK.
+//  Raster counters run on the 4 MHz character clock (two pixels; on the
+//  6809 boards 6 MHz, one pixel). Counts go from 0 to the TOTAL registers
+//  inclusive; sync runs from 0 to END SYNC, and the display is visible from
+//  END BLANK up to START BLANK. At reset the raster registers take the
+//  values the game programs at boot (raster09: Strata Bowling's).
+//
+//  CB = 1 selects the wiring of the earlier Capcom Bowling board (MAME
+//  capbowl.cpp): offset[9:8] is the function (0/2 register, 1 XY, 3 direct),
+//  the direct-access row comes from the board's row latch (op_row), VRAM is
+//  64 KB (address bits above 15 are dropped), and the raster registers reset
+//  to Capcom Bowling's values.
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
-module it8_tms34061
+module it8_tms34061 #(parameter CB = 0)
 (
 	input             clk,
 	input             reset,
-	input             chr_ce,          // 4 MHz character clock
+	input             chr_ce,          // 4 MHz character clock (6809 boards: 6 MHz)
+	input             raster09,        // reset to Strata Bowling's raster, not Ninja Clowns'
 
 	// CPU access, one byte at a time.
 	input             op_start,        // pulse
 	input      [11:0] op_offs,         // byte offset inside the TMS window
+	input       [7:0] op_row,          // CB: direct-access row (board latch)
 	input             op_we,
 	input       [7:0] op_wdata,
 	output reg        op_done,         // pulse
@@ -69,6 +79,7 @@ module it8_tms34061
 	output      [7:0] next_y,          // its display line number
 	output            vblank_start,    // pulse: vcnt is about to enter vertical blank
 	output      [9:0] h_end_sync,      // for the display column offset
+	output      [9:0] h_end_blank,     // first visible count
 	output     [15:0] dispstart,
 	output            display_on,      // CONTROL2 bit 13 (0 = blanked)
 	output            irq              // vertical interrupt (unused on 68000 boards)
@@ -102,6 +113,7 @@ assign xyoffset   = regs[R_XYOFFS];
 assign dispstart  = regs[R_DSTART];
 assign display_on = regs[R_CTRL2][13];
 assign h_end_sync = regs[R_HESYNC][9:0];
+assign h_end_blank = regs[R_HEBLNK][9:0];
 assign irq        = regs[R_STATUS][0] & regs[R_CTRL1][10];
 
 // ---------------------------------------------------------------------------
@@ -171,7 +183,7 @@ localparam [1:0] S_COPY = 2'd2;   // waiting for a row copy
 
 reg  [1:0] state;
 
-wire [2:0] func    = op_offs[11:9];
+wire [2:0] func    = CB ? {1'b0, op_offs[9:8]} : op_offs[11:9];
 wire [7:0] col     = op_offs[7:0];
 wire [7:0] regcol  = col ^ 8'h02;
 wire [5:0] regnum  = regcol[7:2];
@@ -202,19 +214,19 @@ always @(posedge clk) begin
 		yshift <= 4'd0;
 		sr_src <= 10'd0;
 		for (k = 0; k < 18; k = k + 1) regs[k] <= 16'h0000;
-		// Raster registers reset to the values Ninja Clowns programs at
-		// boot rather than the datasheet defaults (a 1026 x 257 raster), so
-		// the monitor sees one stable mode while the core is loading or
-		// held in reset. The display stays blanked until the game enables
-		// it in CONTROL2, and every register is rewritten by the game.
-		regs[R_HESYNC] <= 16'h000C;
-		regs[R_HEBLNK] <= 16'h002C;
-		regs[R_HSBLNK] <= 16'h00E1;
-		regs[R_HTOTAL] <= 16'h00FE;
-		regs[R_VESYNC] <= 16'h0008;
-		regs[R_VEBLNK] <= 16'h0013;
-		regs[R_VSBLNK] <= 16'h0103;
-		regs[R_VTOTAL] <= 16'h0106;
+		// Raster registers reset to the values the game programs at boot
+		// rather than the datasheet defaults (a 1026 x 257 raster), so the
+		// monitor sees one stable mode while the core is loading or held in
+		// reset. The display stays blanked until the game enables it in
+		// CONTROL2, and every register is rewritten by the game.
+		regs[R_HESYNC] <= CB ? 16'h000E : raster09 ? 16'h0029 : 16'h000C;
+		regs[R_HEBLNK] <= CB ? 16'h000F : raster09 ? 16'h0053 : 16'h002C;
+		regs[R_HSBLNK] <= CB ? 16'h00E3 : raster09 ? 16'h0153 : 16'h00E1;
+		regs[R_HTOTAL] <= CB ? 16'h00FC : raster09 ? 16'h017D : 16'h00FE;
+		regs[R_VESYNC] <= CB ? 16'h0005 : raster09 ? 16'h0003 : 16'h0008;
+		regs[R_VEBLNK] <= CB ? 16'h0010 : raster09 ? 16'h0015 : 16'h0013;
+		regs[R_VSBLNK] <= CB ? 16'h0105 : raster09 ? 16'h0105 : 16'h0103;
+		regs[R_VTOTAL] <= CB ? 16'h0106 : 16'h0106;
 		regs[R_CTRL1]  <= 16'h7000;
 		regs[R_CTRL2]  <= 16'h0600;
 		regs[R_XYOFFS] <= 16'h0010;
@@ -251,7 +263,7 @@ always @(posedge clk) begin
 
 				3'd1: begin
 					// Pixel address is taken before the adjustment.
-					vr_addr  <= {regs[R_XYOFFS][9:8], regs[R_XYADDR]};
+					vr_addr  <= CB ? {2'b00, regs[R_XYADDR]} : {regs[R_XYOFFS][9:8], regs[R_XYADDR]};
 					vr_we    <= op_we;
 					vr_vdata <= op_wdata;
 					vr_ldata <= latch;
@@ -262,9 +274,10 @@ always @(posedge clk) begin
 				end
 
 				3'd3: begin
-					// Row is hard-wired to 0xFF on this board. Only writes
-					// add the CONTROL2 page bits (as MAME).
-					vr_addr  <= {op_we ? ctl2_pg : 2'b00, 8'hFF, col};
+					// IT 8-bit boards: row hard-wired to 0xFF, and only writes
+					// add the CONTROL2 page bits (as MAME). Capcom Bowling:
+					// row from the board latch, 64 KB.
+					vr_addr  <= CB ? {2'b00, op_row, col} : {op_we ? ctl2_pg : 2'b00, 8'hFF, col};
 					vr_we    <= op_we;
 					vr_vdata <= op_wdata;
 					vr_ldata <= latch;
