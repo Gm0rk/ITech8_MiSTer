@@ -16,6 +16,12 @@
 //  IRQ comes from the command latch, FIRQ from the VIA or the YM3812.
 //  The OKI's 256 KB sample ROM lives in SDRAM bank 2.
 //
+//  ym2203 selects the sound section of the 6809 boards of Strata Bowling
+//  style (MAME sound2203_map): the same CPU, RAM, ROM and OKI, a YM2203 at
+//  2000-2003 (A1 ignored) instead of the YM3812, no VIA, FIRQ from the
+//  YM2203. Its port B bit 0 is read back by the main CPU (special). Mix as
+//  MAME: FM 0.75, each SSG channel 0.07, OKI 0.75.
+//
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
@@ -27,6 +33,7 @@ module it8_sound
 	input                    fall_q,        // 6809 Q falling edge
 	input                    ym_cen,        // 4 MHz
 	input                    oki_cen,       // 1 MHz
+	input                    ym2203,        // 6809 board sound map (see above)
 
 	input                    cmd_we,        // main CPU write to the command latch
 	input              [7:0] cmd,
@@ -43,6 +50,7 @@ module it8_sound
 	input              [1:0] mix_sel,       // 0 = MAME balance, 1 = FM only, 2 = PCM only
 	output reg signed [15:0] audio,
 	output             [7:0] via_pb,        // coin counter, ticket motor, LED
+	output                   special,       // to the main CPU's input port 40 bit 0
 
 	output reg        [15:0] dbg_cmds,
 	output reg         [7:0] dbg_last_cmd,
@@ -63,6 +71,7 @@ reg         cmd_pend;
 reg   [7:0] cmd_latch;
 wire        via_irq;
 wire        ym_irq_n;
+wire        ym3_irq_n;                  // YM2203 (6809 boards)
 
 mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 (
@@ -76,7 +85,7 @@ mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 	.BS       (),
 	.BA       (),
 	.nIRQ     (~cmd_pend),
-	.nFIRQ    (~(via_irq | ~ym_irq_n)),
+	.nFIRQ    (ym2203 ? ym3_irq_n : ~(via_irq | ~ym_irq_n)),
 	.nNMI     (1'b1),
 	.AVMA     (),
 	.BUSY     (),
@@ -90,10 +99,11 @@ mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 assign dbg_pc = addr;
 
 wire sel_latch = (addr == 16'h1000);
-wire sel_ym    = (addr[15:1] == 15'h1000);        // 2000-2001
-wire sel_ram   = (addr[15:11] == 5'b00110);       // 3000-37FF
+wire sel_ym    = !ym2203 && (addr[15:1] == 15'h1000);   // 2000-2001
+wire sel_ym3   =  ym2203 && (addr[15:2] == 14'h0800);   // 2000-2003
+wire sel_ram   = (addr[15:11] == 5'b00110);             // 3000-37FF
 wire sel_oki   = (addr == 16'h4000);
-wire sel_via   = (addr[15:4] == 12'h500);
+wire sel_via   = !ym2203 && (addr[15:4] == 12'h500);
 wire sel_rom   = addr[15];
 
 // Accesses complete at the falling edge of E.
@@ -189,6 +199,51 @@ jtopl2 ym3812
 );
 
 // ---------------------------------------------------------------------------
+// YM2203 (6809 boards)
+
+wire  [7:0] ym3_dout, ym3_iob;
+wire        ym3_iob_oe;
+reg         special_q;
+wire  [7:0] psg_a, psg_b, psg_c;
+wire signed [15:0] fm3;
+
+jt03 ym2203_chip
+(
+	.rst        (reset),
+	.clk        (clk),
+	.cen        (ym_cen),
+	.din        (cpu_dout),
+	.addr       (addr[0]),
+	.cs_n       (~(wr & sel_ym3)),
+	.wr_n       (1'b0),
+	.dout       (ym3_dout),
+	.irq_n      (ym3_irq_n),
+	.IOA_in     (8'hFF),
+	.IOB_in     (8'hFF),
+	.IOA_out    (),
+	.IOB_out    (ym3_iob),
+	.IOA_oe     (),
+	.IOB_oe     (ym3_iob_oe),
+	.psg_A      (psg_a),
+	.psg_B      (psg_b),
+	.psg_C      (psg_c),
+	.fm_snd     (fm3),
+	.psg_snd    (),
+	.snd        (),
+	.snd_sample (),
+	.debug_view ()
+);
+
+// MAME sees port B only while it is an output (ym2203_portb_out), and keeps
+// the last value otherwise.
+always @(posedge clk) begin
+	if (reset)           special_q <= 1'b0;
+	else if (ym3_iob_oe) special_q <= ym3_iob[0];
+end
+
+assign special = ym2203 ? special_q : via_pb[0];
+
+// ---------------------------------------------------------------------------
 // OKI M6295 and its sample ROM in SDRAM (one-word cache).
 
 wire  [7:0] oki_dout;
@@ -244,6 +299,7 @@ always @(*) begin
 	else if (sel_ram)   cpu_din = ram_q;
 	else if (sel_latch) cpu_din = cmd_latch;
 	else if (sel_ym)    cpu_din = ym_dout;
+	else if (sel_ym3)   cpu_din = ym3_dout;
 	else if (sel_oki)   cpu_din = oki_dout;
 	else if (sel_via)   cpu_din = via_dout;
 	else                cpu_din = 8'h00;
@@ -251,9 +307,14 @@ end
 
 // ---------------------------------------------------------------------------
 // Mixer: MAME routes both chips to mono at 0.75. One OKI voice at full
-// scale (12 bits) matches the YM3812's full scale.
+// scale (12 bits) matches the YM3812's full scale. The YM2203's SSG
+// channels (0-255 each) are 0.07 of full scale (x 9), as on the Capcom
+// Bowling board.
 
-wire signed [19:0] fm_part  = (mix_sel == 2'd2) ? 20'sd0 : (fm * 3) >>> 2;
+wire        [9:0] psg_sum  = {2'b00, psg_a} + {2'b00, psg_b} + {2'b00, psg_c};
+wire signed [19:0] fm_in    = ym2203 ? fm3 : fm;
+wire signed [19:0] psg_in   = ym2203 ? $signed({10'd0, psg_sum}) * 20'sd9 : 20'sd0;
+wire signed [19:0] fm_part  = (mix_sel == 2'd2) ? 20'sd0 : ((fm_in * 20'sd3) >>> 2) + psg_in;
 wire signed [19:0] pcm_part = (mix_sel == 2'd1) ? 20'sd0 : pcm * 12;
 wire signed [19:0] mix      = fm_part + pcm_part;
 
