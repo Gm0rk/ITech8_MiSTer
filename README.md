@@ -14,34 +14,40 @@ in. **Ninja Clowns** (1991) boots and is playable.
 
 ## Games
 
-MAME's `itech8` driver lists sixteen games. This core implements the 68000
-board, which only Ninja Clowns uses; the other fifteen need the 6809 main
-board, which is not started.
+[System 16](https://www.system16.com/hardware.php?id=805) lists seventeen
+games on Incredible Technologies' 8-bit hardware. This core implements the
+68000 board, which only Ninja Clowns uses; the other games run on 6809
+boards, which are not started.
 
 | Game | Year | Main CPU | Status |
 |---|---|---|---|
-| **Ninja Clowns** | 1991 | 68000 | **Fully playable, with sound** |
 | Arlington Horse Racing | 1991 | 6809 | Not started |
+| Bowl-O-Rama | 1991 | 6809 ¹ | Not started |
+| Capcom Bowling | 1988 | 6809 ¹ | Not started |
 | Dyno Bop | 1990 | 6809, Z80 ball sensors | Not started |
 | Golden Par Golf | 1992 | 6809 | Not started |
 | Golden Tee Golf | 1990 | 6809 | Not started |
 | Golden Tee Golf II | 1992 | 6809 | Not started |
-| Grudge Match | 1989 | 6809 | Not started |
 | Hot Shots Tennis | 1990 | 6809 | Not started |
-| Neck-N-Neck | 1992 | 6809 | Not started |
+| Neck'N'Neck | 1992 | 6809 | Not started |
+| **Ninja Clowns** | 1991 | 68000 | **Fully playable, with sound** |
 | Peggle | 1991 | 6809 | Not started |
 | Poker Dice | 1991 | 6809 | Not started |
 | Rim Rockin' Basketball | 1991 | 6809 | Not started |
 | Slick Shot | 1990 | 6809, Z80 ball sensors | Not started |
 | Strata Bowling | 1990 | 6809 | Not started |
 | Super Strike Bowling | 1990 | 6809, Z80 ball sensors | Not started |
-| Wheel of Fortune | 1989 | 6809 | Not started |
+| Wheel Of Fortune | 1989 | 6809 | Not started |
+
+¹ The earlier IT board (MAME's `capbowl` driver): TMS34061 video but no
+ITV4400 blitter, and a 6809 sound CPU with a YM2203 instead of the YM3812
+and OKI M6295. The other games are in MAME's `itech8` driver.
 
 ## Progress
 
 ```
 Ninja Clowns board  [##########]  10/10 sections working on hardware
-Games               [#---------]  1/16 playable
+Games               [#---------]  1/17 playable
 ```
 
 The ten board sections are the 68000 and memory map, SDRAM and ROM loader,
@@ -98,8 +104,8 @@ hardware behaviour:
 
 MAME is a reference for *behaviour*; no MAME code is compiled into this core.
 
-**[System 16](https://www.system16.com/hardware.php?id=805&gid=2280#2280)**
-for the hardware family listing.
+**[System 16](https://www.system16.com/hardware.php?id=805)** for the
+hardware family listing and the game list.
 
 **[fx68k](https://github.com/ijor/fx68k)** by Jorge Cwik: the 68000, cycle
 accurate.
