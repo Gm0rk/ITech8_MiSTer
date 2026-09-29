@@ -13,7 +13,8 @@
 //    2    flags: 4 transparent,          9   rows to draw
 //         3 RLE, 2 Y flip, 1 X flip,    10   pixels to skip after each row
 //         0 nibble shift                11   rows to skip at the end
-//    3    write: start / read: status   12-15 analog inputs (not fitted)
+//    3    write: start / read: status   12-15 input ports (trackball on
+//                                             the 6809 bowling boards)
 //    4/5  width (bytes) / height (rows)
 //    6    source data mask
 //    7    output: bit 6 selects 4 bpp transparency
@@ -40,6 +41,8 @@ module it8_blitter
 	input       [7:0] reg_wdata,
 	output      [7:0] reg_rdata,      // valid for the current reg_idx
 	input       [7:0] grom_bank,      // 0x100100 bank register
+	input      [23:0] grom_size,      // graphics ROM region in bytes (MAME: offset % length)
+	input      [31:0] an,             // registers 12-15 read these bytes: {15, 14, 13, 12}
 
 	// TMS34061 state sampled at the start of a blit.
 	input      [15:0] xyaddress,
@@ -68,14 +71,14 @@ module it8_blitter
 	output reg [15:0] dbg_late        // blits where drawing outlasted MAME's timing
 );
 
-localparam [23:0] GROM_SIZE  = 24'h180000;
-localparam [19:0] GROM_WORDS = 20'hC0000;
+wire       [23:0] GROM_SIZE  = grom_size;
+wire       [19:0] GROM_WORDS = grom_size[20:1];
 localparam [23:0] GROM_BASE  = 24'h400000;   // SDRAM word address of bank 1
 
 reg [7:0] breg[0:15];
 
 assign reg_rdata = (reg_idx == 4'd3)  ? {busy, breg[3][6:0]} :
-                   (reg_idx >= 4'd12) ? 8'h00 :
+                   (reg_idx >= 4'd12) ? an[8*reg_idx[1:0] +: 8] :
                                         breg[reg_idx];
 
 // ---------------------------------------------------------------------------
