@@ -2,8 +2,17 @@
 //  Incredible Technologies 8-bit hardware for MiSTer
 //  Arcade-ITech8.sv - MiSTer emu top level
 //
-//  First game: Ninja Clowns (Strata / Incredible Technologies, 1991), the
-//  68000 variant of the IT 8-bit blitter hardware.
+//  Three boards, chosen by the MRA (ioctl index 1, one byte, bits 1:0):
+//    0  Ninja Clowns (Strata / Incredible Technologies, 1991), the 68000
+//       variant of the IT 8-bit blitter hardware (it8_top)
+//    1  Capcom Bowling / Coors Light Bowling (1988-89), the earlier 6809
+//       board (cb_top)
+//    2  Bowl-O-Rama (1991): the same board with its turbo board
+//    3  the 6809 variant of the IT 8-bit blitter hardware, Strata Bowling
+//       (1990) style: it8_top with its 6809 main CPU (it8_main09)
+//  The board not selected is held in reset; SDRAM ports, NVRAM, video and
+//  audio are switched between them. The bowling games are vertical (MAME
+//  ROT270); screen_rotate turns them for a horizontal screen.
 //
 //  Clocks: clk_sys 48 MHz runs the whole board (every board clock divides
 //  it, see it8_ce.sv) and the SDRAM. clk_vid 96 MHz, from the same PLL, runs
@@ -35,7 +44,6 @@ assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
-assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
 assign VGA_F1         = 0;
 assign VGA_SCALER     = 0;
@@ -87,7 +95,9 @@ localparam CONF_STR = {
 	"H1P1O[85:79],CRT H-Position,", CRT_HP, ";",
 	"H1P1O[78:74],CRT V-Shift,", CRT_S5, ";",
 	"-;",
-	"O[8:7],Audio,FM + PCM,FM only,PCM only;",
+	"H2O[8:7],Audio,FM + PCM,FM only,PCM only;",
+	"H3O[14],Orientation,Horizontal,Vertical;",
+	"H4O[16:15],Trackball Speed,Normal,Fast,Slow;",
 	// The board's service switch: on opens the game's service menu.
 	"O[9],Service Mode,Off,On;",
 	CONF_DBG,
@@ -112,6 +122,21 @@ wire         ioctl_wait;
 wire   [7:0] ioctl_din;
 
 wire  [31:0] joystick_0, joystick_1;
+wire  [24:0] ps2_mouse;
+wire         video_rotated;
+
+// Board, from the MRA (ioctl index 1). Bits 1:0: 0 Ninja Clowns, 1 Capcom
+// / Coors Light Bowling, 2 Bowl-O-Rama, 3 an itech8 6809 board (Strata
+// Bowling style). Bits 7:2 describe a 6809 game: 7 vertical (ROT270),
+// 6 trackball, 4 program bank bit inverted, 3 64 KB program; the rest are
+// 0. Stays 0 when the MRA sends no index 1.
+reg    [7:0] board_byte = 8'd0;
+wire   [1:0] board_sel = board_byte[1:0];
+wire         is_cb  = (board_sel == 2'd1) || (board_sel == 2'd2);
+wire         is_br  = (board_sel == 2'd2);
+wire         is_m09 = (board_sel == 2'd3);
+wire         is_vert = is_cb | (is_m09 & board_byte[7]);
+wire         has_tb  = is_cb | (is_m09 & board_byte[6]);
 
 // Declared here because hps_io and the loader use them before the board.
 wire         nv_written;
@@ -130,12 +155,12 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 	.gamma_bus          (gamma_bus),
 
 	.forced_scandoubler (forced_scandoubler),
-	.video_rotated      (1'b0),
+	.video_rotated      (video_rotated),
 	.new_vmode          (1'b0),
 
 	.buttons            (buttons),
 	.status             (status),
-	.status_menumask    ({14'd0, ~status[101], 1'b0}),
+	.status_menumask    ({11'd0, ~has_tb, ~is_vert, is_cb, ~status[101], 1'b0}),
 
 	.ioctl_download     (ioctl_download),
 	.ioctl_upload       (ioctl_upload),
@@ -150,8 +175,13 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 	.ioctl_wait         (ioctl_wait),
 
 	.joystick_0         (joystick_0),
-	.joystick_1         (joystick_1)
+	.joystick_1         (joystick_1),
+	.ps2_mouse          (ps2_mouse)
 );
+
+always @(posedge clk_sys)
+	if (ioctl_download && ioctl_wr && ioctl_index[5:0] == 6'd1 && ioctl_addr == 27'd0)
+		board_byte <= ioctl_dout;
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
@@ -167,7 +197,7 @@ pll pll
 );
 
 wire cpu_phi1, cpu_phi2, pix_ce, chr_ce, pix_left;
-wire snd_fall_e, snd_fall_q, ym_cen, oki_cen;
+wire snd_fall_e, snd_fall_q, ym_cen, oki_cen, vid6_ce;
 wire [1:0] cpu_ph;
 
 it8_ce ce
@@ -184,19 +214,35 @@ it8_ce ce
 	.snd_fall_q (snd_fall_q),
 	.ym_cen     (ym_cen),
 	.oki_cen    (oki_cen),
-	.blt_tick   ()
+	.blt_tick   (),
+	.vid6_ce    (vid6_ce)
 );
 
 ///////////////////////   SDRAM AND ROM LOADING   ///////////////
 
 wire        sd_ready;
-wire        rom_req, rom_accept, rom_ack, rom_quiet;
-wire [21:0] rom_addr;
+wire        rom_accept, rom_ack;
 wire [15:0] rom_data;
-wire [23:0] grom_addr, pcm_addr, ver_addr, wr_addr;
-wire        grom_req, grom_ack, pcm_req, pcm_ack, ver_req, ver_ack, wr_req, wr_ack;
+wire [23:0] ver_addr, wr_addr;
+wire        grom_ack, pcm_ack, ver_req, ver_ack, wr_req, wr_ack;
 wire [15:0] grom_data, pcm_data, ver_data, wr_data;
 wire [15:0] sd_refresh, sd_forced;
+
+// Each board's SDRAM requests; the board in reset holds its lines still.
+wire        it8_rom_req, it8_rom_quiet, it8_grom_req, it8_pcm_req;
+wire [21:0] it8_rom_addr;
+wire [23:0] it8_grom_addr, it8_pcm_addr;
+wire        cb_rom_req, cb_rom_quiet, cb_blt_req, cb_snd_req;
+wire [21:0] cb_rom_addr;
+wire [23:0] cb_blt_addr, cb_snd_addr;
+
+wire        rom_req   = is_cb ? cb_rom_req   : it8_rom_req;
+wire [21:0] rom_addr  = is_cb ? cb_rom_addr  : it8_rom_addr;
+wire        rom_quiet = is_cb ? cb_rom_quiet : it8_rom_quiet;
+wire        grom_req  = is_cb ? cb_blt_req   : it8_grom_req;
+wire [23:0] grom_addr = is_cb ? cb_blt_addr  : it8_grom_addr;
+wire        pcm_req   = is_cb ? cb_snd_req   : it8_pcm_req;
+wire [23:0] pcm_addr  = is_cb ? cb_snd_addr  : it8_pcm_addr;
 
 it8_sdram sdram
 (
@@ -253,12 +299,16 @@ wire [14:0] snd_addr;
 wire [13:0] nv_fill_addr;
 wire [31:0] sum_w, sum_r;
 wire [20:0] words;
+wire [23:0] grom_bytes;
 
 it8_loader loader
 (
 	.clk          (clk_sys),
 	.reset        (~sd_ready),
 	.recheck      (user_reset & ~user_reset_d),
+	.cb           (is_cb),
+	.m09          (is_m09),
+	.nv_guard     (~is_cb & ~is_m09),
 	.dl           (rom_dl),
 	.nv_dl        (ioctl_download & nv_io),
 	.dl_wr        (ioctl_wr),
@@ -286,24 +336,30 @@ it8_loader loader
 	.loaded       (loaded),
 	.sum_w        (sum_w),
 	.sum_r        (sum_r),
-	.words        (words)
+	.words        (words),
+	.grom_bytes   (grom_bytes)
 );
 
 // Downloads wait while the SDRAM is still initialising.
 assign ioctl_wait = ld_wait | ~sd_ready;
 
-// NVRAM, MiSTer side: FF fill at ROM load, then the saved file (index 4);
-// a file of all zeros is replaced by the FF fill again (it8_loader).
-// Any 68000 write marks it for saving; MiSTer saves it when the OSD opens,
-// and the 68000 is held meanwhile so the image is consistent.
-wire  [7:0] nv_dout;
+// NVRAM, MiSTer side: filled at ROM load (FF; Bowl-O-Rama 00, as MAME),
+// then the saved file (index 4); for Ninja Clowns a file of all zeros is
+// replaced by the FF fill again (it8_loader). Any CPU write marks it for
+// saving; MiSTer saves it when the OSD opens, and the CPUs are held
+// meanwhile so the image is consistent.
+wire  [7:0] it8_nv_dout, cb_nv_dout;
+wire        it8_nv_written, cb_nv_written;
+wire  [7:0] nv_dout = is_cb ? cb_nv_dout : it8_nv_dout;
+assign      nv_written = is_cb ? cb_nv_written : it8_nv_written;
+
 always @(posedge clk_sys) begin
 	if (nv_written) nv_dirty <= 1'b1;
 	if (nv_saving)  nv_dirty <= 1'b0;
 end
 
 wire [13:0] nv_addr = nv_fill ? nv_fill_addr : ioctl_addr[13:0];
-wire  [7:0] nv_din  = nv_fill ? 8'hFF : ioctl_dout;
+wire  [7:0] nv_din  = nv_fill ? (is_br ? 8'h00 : 8'hFF) : ioctl_dout;
 wire        nv_we   = nv_fill | (ioctl_download & ioctl_wr & nv_io & ~|ioctl_addr[26:14]);
 assign ioctl_din    = nv_dout;
 
@@ -323,10 +379,27 @@ wire [7:0] p1 = {joystick_0[4], joystick_0[5], joystick_0[0], joystick_0[1],
 wire [7:0] p2 = {joystick_1[4], joystick_1[5], joystick_1[0], joystick_1[1],
                  joystick_1[2], joystick_1[3], joystick_1[7], joystick_1[6]};
 
-wire        ce_pix;
-wire  [7:0] core_r, core_g, core_b;
-wire        core_hs, core_vs, core_hb, core_vb;
-wire [15:0] audio;
+// Trackball (bowling games): the mouse, or the stick.
+wire [7:0] track_x, track_y;
+
+cb_trackball trackball
+(
+	.clk       (clk_sys),
+	.reset     (reset),
+	.ps2_mouse (ps2_mouse),
+	.up        (joystick_0[3]),
+	.down      (joystick_0[2]),
+	.left      (joystick_0[1]),
+	.right     (joystick_0[0]),
+	.speed     (status[16:15]),
+	.per_frame (is_m09),
+	.x         (track_x),
+	.y         (track_y)
+);
+
+wire        it8_ce_pix, it8_hs, it8_vs, it8_hb, it8_vb;
+wire  [7:0] it8_r, it8_g, it8_b;
+wire [15:0] it8_audio;
 
 wire [23:0] dbg_pc;
 wire [15:0] dbg_frames, dbg_irq3, dbg_irq2, dbg_waits, dbg_blits, dbg_blit_late;
@@ -337,8 +410,15 @@ wire [31:0] dbg_nv104;
 it8_top board
 (
 	.clk           (clk_sys),
-	.reset         (reset),
+	.reset         (reset | is_cb),
 	.hold          (nv_saving),
+	.vid6_ce       (vid6_ce),
+	.cpu09         (is_m09),
+	.bank_xor      (board_byte[4]),
+	.prog64        (board_byte[3]),
+	.grom_size     (is_m09 ? grom_bytes : 24'h180000),
+	.track_x       (track_x),
+	.track_y       (track_y),
 	.cpu_phi1      (cpu_phi1),
 	.cpu_phi2      (cpu_phi2),
 	.pix_ce        (pix_ce),
@@ -354,18 +434,18 @@ it8_top board
 	.coin2         (joystick_1[8]),
 	.service       (joystick_0[9] | joystick_1[9]),
 	.test          (status[9]),
-	.rom_req       (rom_req),
-	.rom_addr      (rom_addr),
+	.rom_req       (it8_rom_req),
+	.rom_addr      (it8_rom_addr),
 	.rom_accept    (rom_accept),
 	.rom_ack       (rom_ack),
 	.rom_data      (rom_data),
-	.rom_quiet     (rom_quiet),
-	.grom_addr     (grom_addr),
-	.grom_req      (grom_req),
+	.rom_quiet     (it8_rom_quiet),
+	.grom_addr     (it8_grom_addr),
+	.grom_req      (it8_grom_req),
 	.grom_ack      (grom_ack),
 	.grom_data     (grom_data),
-	.pcm_addr      (pcm_addr),
-	.pcm_req       (pcm_req),
+	.pcm_addr      (it8_pcm_addr),
+	.pcm_req       (it8_pcm_req),
 	.pcm_ack       (pcm_ack),
 	.pcm_data      (pcm_data),
 	.vec_we        (vec_we),
@@ -377,18 +457,18 @@ it8_top board
 	.nv_addr       (nv_addr),
 	.nv_din        (nv_din),
 	.nv_we         (nv_we),
-	.nv_dout       (nv_dout),
-	.nv_written    (nv_written),
-	.ce_pix        (ce_pix),
-	.r             (core_r),
-	.g             (core_g),
-	.b             (core_b),
-	.hs            (core_hs),
-	.vs            (core_vs),
-	.hblank        (core_hb),
-	.vblank        (core_vb),
+	.nv_dout       (it8_nv_dout),
+	.nv_written    (it8_nv_written),
+	.ce_pix        (it8_ce_pix),
+	.r             (it8_r),
+	.g             (it8_g),
+	.b             (it8_b),
+	.hs            (it8_hs),
+	.vs            (it8_vs),
+	.hblank        (it8_hb),
+	.vblank        (it8_vb),
 	.mix_sel       (status[8:7]),
-	.audio         (audio),
+	.audio         (it8_audio),
 	.dbg_pc        (dbg_pc),
 	.dbg_frames    (dbg_frames),
 	.dbg_irq3      (dbg_irq3),
@@ -403,6 +483,92 @@ it8_top board
 	.dbg_page      (dbg_page),
 	.dbg_nv104     (dbg_nv104)
 );
+
+// ---------------------------------------------------------------------------
+// Capcom Bowling board. Controls on the J1 buttons: Hook Left (1), Hook
+// Right (2), Start (4), Coin (5), Service (6); the trackball from the mouse
+// or the stick.
+
+
+wire        cb_ce_pix, cb_hs, cb_vs, cb_hb, cb_vb;
+wire  [7:0] cb_r, cb_g, cb_b;
+wire [15:0] cb_audio;
+wire [15:0] cb_pc, cb_frames, cb_firq, cb_nmi, cb_waits, cb_turbo, cb_snd_cmds, cb_snd_pc;
+wire  [7:0] cb_snd_last, cb_bank;
+
+cb_top cb_board
+(
+	.clk          (clk_sys),
+	.reset        (reset | ~is_cb),
+	.hold         (nv_saving),
+	.bowlrama     (is_br),
+	.pix_ce       (pix_ce),
+	.chr_ce       (chr_ce),
+	.pix_left     (pix_left),
+	.ym_cen       (ym_cen),
+	.wide         (1'b0),
+	.track_x      (track_x),
+	.track_y      (track_y),
+	.p1_hook_l    (joystick_0[4]),
+	.p1_hook_r    (joystick_0[5]),
+	.p2_hook_l    (joystick_1[4]),
+	.p2_hook_r    (joystick_1[5]),
+	.start        (joystick_0[7] | joystick_1[7]),
+	.coin1        (joystick_0[8]),
+	.coin2        (joystick_1[8]),
+	.service      (joystick_0[9] | joystick_1[9] | status[9]),
+	.cocktail     (1'b0),
+	.rom_req      (cb_rom_req),
+	.rom_addr     (cb_rom_addr),
+	.rom_accept   (rom_accept),
+	.rom_ack      (rom_ack),
+	.rom_data     (rom_data),
+	.rom_quiet    (cb_rom_quiet),
+	.blt_addr     (cb_blt_addr),
+	.blt_req      (cb_blt_req),
+	.blt_ack      (grom_ack),
+	.blt_data     (grom_data),
+	.snd_addr     (cb_snd_addr),
+	.snd_req      (cb_snd_req),
+	.snd_ack      (pcm_ack),
+	.snd_data     (pcm_data),
+	.nv_addr      (nv_addr[10:0]),
+	.nv_din       (nv_din),
+	.nv_we        (nv_we),
+	.nv_dout      (cb_nv_dout),
+	.nv_written   (cb_nv_written),
+	.ce_pix       (cb_ce_pix),
+	.r            (cb_r),
+	.g            (cb_g),
+	.b            (cb_b),
+	.hs           (cb_hs),
+	.vs           (cb_vs),
+	.hblank       (cb_hb),
+	.vblank       (cb_vb),
+	.audio        (cb_audio),
+	.dbg_pc       (cb_pc),
+	.dbg_frames   (cb_frames),
+	.dbg_firq     (cb_firq),
+	.dbg_nmi      (cb_nmi),
+	.dbg_waits    (cb_waits),
+	.dbg_turbo    (cb_turbo),
+	.dbg_snd_cmds (cb_snd_cmds),
+	.dbg_snd_last (cb_snd_last),
+	.dbg_snd_pc   (cb_snd_pc),
+	.dbg_bank     (cb_bank)
+);
+
+// Selected board's picture and sound. Both boards' pixel enables are pix_ce
+// one clock late, so the stream timing is the same either way.
+wire        ce_pix  = is_cb ? cb_ce_pix : it8_ce_pix;
+wire  [7:0] core_r  = is_cb ? cb_r  : it8_r;
+wire  [7:0] core_g  = is_cb ? cb_g  : it8_g;
+wire  [7:0] core_b  = is_cb ? cb_b  : it8_b;
+wire        core_hs = is_cb ? cb_hs : it8_hs;
+wire        core_vs = is_cb ? cb_vs : it8_vs;
+wire        core_hb = is_cb ? cb_hb : it8_hb;
+wire        core_vb = is_cb ? cb_vb : it8_vb;
+wire [15:0] audio   = is_cb ? cb_audio : it8_audio;
 
 assign AUDIO_L = audio;
 assign AUDIO_R = audio;
@@ -465,21 +631,21 @@ it8_dbg_text #(
 	.vis_x    (vis_x),
 	.vis_y    (vis_y),
 	.vals     ({BLD_BCD[31:0],
-	            {8'd0, dbg_pc},
-	            {16'd0, dbg_frames},
-	            {dbg_irq3, dbg_irq2},
-	            {dbg_blits, dbg_blit_late},
-	            {dbg_waits, dbg_vram_drop},
-	            {dbg_snd_cmds, dbg_snd_last, 8'd0},
-	            {16'd0, dbg_snd_pc},
+	            is_cb ? {16'd0, cb_pc}                   : {8'd0, dbg_pc},
+	            is_cb ? {16'd0, cb_frames}               : {16'd0, dbg_frames},
+	            is_cb ? {cb_firq, cb_nmi}                : {dbg_irq3, dbg_irq2},
+	            is_cb ? {cb_turbo, 16'd0}                : {dbg_blits, dbg_blit_late},
+	            is_cb ? {cb_waits, 16'd0}                : {dbg_waits, dbg_vram_drop},
+	            is_cb ? {cb_snd_cmds, cb_snd_last, 8'd0} : {dbg_snd_cmds, dbg_snd_last, 8'd0},
+	            is_cb ? {16'd0, cb_snd_pc}               : {16'd0, dbg_snd_pc},
 	            {sd_refresh, sd_forced},
 	            sum_w,
 	            sum_r,
-	            {3'd0, loaded, 7'd0, words},
-	            {24'd0, dbg_page},
+	            {1'b0, board_sel, loaded, 7'd0, words},
+	            is_cb ? {24'd0, cb_bank}                 : {24'd0, dbg_page},
 	            {joystick_1[15:0], joystick_0[15:0]},
 	            {nvst_fill, nvst_file, nvst_zero, 4'd0, nvst_save},
-	            dbg_nv104}),
+	            has_tb ? {16'd0, track_x, track_y}       : dbg_nv104}),
 	.row0_msn (BLD_BCD[35:32]),
 	.pix      (ov_pix),
 	.in_box   (ov_box)
@@ -547,7 +713,8 @@ arcade_video #(.WIDTH(362), .DW(24)) arcade_video
 // ---------------------------------------------------------------------------
 // CRT Adjust (rmonic79), core-side. Active only without the scandoubler:
 // its read rate assumes the native 15 kHz pixel clock. 12 clk_vid clocks per
-// pixel = 48 quarter cycles; each H-Size step is 1/48 (about 2%).
+// pixel = 48 quarter cycles (8 MHz dots); each H-Size step is 1/48 (about
+// 2%). The 6809 boards' 6 MHz dots are 16 clocks, 64 quarter cycles.
 
 wire scandoubled = (status[5:3] != 3'd0) | forced_scandoubler;
 
@@ -573,7 +740,7 @@ reg  hs_ref_d;
 always @(posedge clk_vid) hs_ref_d <= hs_ref;
 wire hs_ref_rise = hs_ref & ~hs_ref_d;
 
-wire [7:0] rd_period = 8'd48 + {{3{hsize_s[4]}}, hsize_s};
+wire [7:0] rd_period = (is_m09 ? 8'd64 : 8'd48) + {{3{hsize_s[4]}}, hsize_s};
 reg  [7:0] rd_acc;
 wire       rd_tick = (rd_acc + 8'd4) >= rd_period;
 
@@ -652,6 +819,51 @@ assign VGA_SL    = crt_on ? 2'd0   : av_sl;
 
 wire [1:0] ar = status[122:121];
 
+// Bowling games are vertical (MAME ROT270): screen_rotate turns the picture
+// 90 degrees anticlockwise into the DDRAM frame buffer for a horizontal
+// screen. Orientation "Vertical" leaves it as the board makes it, for a
+// rotated monitor. Ninja Clowns is never rotated; a 6809 game is when its
+// board byte says it is vertical.
+wire no_rotate = ~is_vert | status[14];
+
+screen_rotate screen_rotate
+(
+	.CLK_VIDEO      (clk_vid),
+	.CE_PIXEL       (av_ce),
+	.VGA_R          (av_r),
+	.VGA_G          (av_g),
+	.VGA_B          (av_b),
+	.VGA_HS         (av_hs),
+	.VGA_VS         (av_vs),
+	.VGA_DE         (av_de),
+	.rotate_ccw     (1'b1),
+	.no_rotate      (no_rotate),
+	.flip           (1'b0),
+	.video_rotated  (video_rotated),
+	.FB_EN          (FB_EN),
+	.FB_FORMAT      (FB_FORMAT),
+	.FB_WIDTH       (FB_WIDTH),
+	.FB_HEIGHT      (FB_HEIGHT),
+	.FB_BASE        (FB_BASE),
+	.FB_STRIDE      (FB_STRIDE),
+	.FB_VBL         (FB_VBL),
+	.FB_LL          (FB_LL),
+	.DDRAM_CLK      (DDRAM_CLK),
+	.DDRAM_BUSY     (DDRAM_BUSY),
+	.DDRAM_BURSTCNT (DDRAM_BURSTCNT),
+	.DDRAM_ADDR     (DDRAM_ADDR),
+	.DDRAM_DIN      (DDRAM_DIN),
+	.DDRAM_BE       (DDRAM_BE),
+	.DDRAM_WE       (DDRAM_WE),
+	.DDRAM_RD       (DDRAM_RD)
+);
+
+assign FB_FORCE_BLANK = 1'b0;
+
+// Original aspect: 4:3 as the board outputs it, 3:4 once rotated.
+wire [11:0] ar_x = (!ar) ? (no_rotate ? 12'd4 : 12'd3) : (ar - 1'd1);
+wire [11:0] ar_y = (!ar) ? (no_rotate ? 12'd3 : 12'd4) : 12'd0;
+
 video_freak video_freak
 (
 	.CLK_VIDEO   (clk_vid),
@@ -663,8 +875,8 @@ video_freak video_freak
 	.VIDEO_ARX   (VIDEO_ARX),
 	.VIDEO_ARY   (VIDEO_ARY),
 	.VGA_DE_IN   (crt_on ? de_osd : av_de),
-	.ARX         ((!ar) ? 12'd4 : (ar - 1'd1)),
-	.ARY         ((!ar) ? 12'd3 : 12'd0),
+	.ARX         (ar_x),
+	.ARY         (ar_y),
 	.CROP_SIZE   (12'd0),
 	.CROP_OFF    (5'd0),
 	.SCALE       (status[12:10])
