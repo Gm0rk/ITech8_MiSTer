@@ -3,15 +3,24 @@
 //  it8_video.sv - video section of the Ninja Clowns main board
 //
 //  TMS34061, eight VRAMs, ITV4400 blitter and MS176 RAMDAC, plus the display
-//  path. Ninja Clowns uses the "2 page large" layout (MAME
-//  screen_update_2page_large): two 512 x 256 pages, each byte holding two
-//  4-bit pixels whose upper colour nibbles come from the latch byte.
+//  path, shared by the 68000 board and the 6809 boards. Two layouts:
+//
+//  * Ninja Clowns, "2 page large" (MAME screen_update_2page_large): two
+//    512 x 256 pages, each byte holding two 4-bit pixels whose upper colour
+//    nibbles come from the latch byte. 8 MHz dots, 4 MHz characters. The
+//    display column for character count h is (h - HESYNC): the serial port
+//    starts shifting when horizontal sync ends, which puts the first visible
+//    byte at column 32 with the game's settings (MAME's visarea 64).
+//
+//  * two_layer, Strata Bowling (MAME screen_update_2layer): one byte per
+//    pixel, 256 x 256. The bottom layer is page 1 (VRAM 0x20000), a full
+//    8-bit pixel; the top layer is the low nibble of page 0 (0x00000), shown
+//    instead wherever it is not 0. 6 MHz dots, one per character count;
+//    column 0 is shown at the first visible count (END BLANK), as MAME.
 //
 //  At the start of every visible line the whole VRAM row is copied into a
-//  line buffer, as the real VRAM transfers the row into its serial port.
-//  The display column for character count h is (h - HESYNC): the serial
-//  port starts shifting when horizontal sync ends, which puts the first
-//  visible byte at column 32 with the game's settings (MAME's visarea 64).
+//  line buffer, as the real VRAM transfers the row into its serial port; in
+//  two_layer mode the page 0 row follows into a second buffer (nibbles).
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -25,8 +34,12 @@ module it8_video
 	input             pix_left,       // pix_ce of the left dot of a character
 
 	// Board registers
+	input             two_layer,      // Strata Bowling display (see above)
 	input             page_sel,       // displayed page (bit 7 of 0x100180 write)
 	input       [7:0] grom_bank,
+	input      [23:0] grom_size,      // graphics ROM region in bytes
+	input      [31:0] an,             // blitter registers 12-15 (input ports)
+	output            tms_irq,        // TMS34061 vertical interrupt
 
 	// CPU access to the TMS34061 (one byte lane).
 	input             tms_start,
@@ -82,7 +95,7 @@ module it8_video
 
 wire [15:0] xyaddress, xyoffset, dispstart;
 wire  [7:0] latch;
-wire  [9:0] hcnt, vcnt, h_end_sync;
+wire  [9:0] hcnt, vcnt, h_end_sync, h_end_blank;
 wire        t_hs, t_vs, t_hb, t_vb, line_start, display_on;
 wire        next_visible;
 wire  [7:0] next_y;
@@ -99,8 +112,10 @@ it8_tms34061 tms
 	.clk          (clk),
 	.reset        (reset),
 	.chr_ce       (chr_ce),
+	.raster09     (two_layer),
 	.op_start     (tms_start),
 	.op_offs      (tms_offs),
+	.op_row       (8'hFF),
 	.op_we        (tms_we),
 	.op_wdata     (tms_wdata),
 	.op_done      (tms_done),
@@ -133,9 +148,10 @@ it8_tms34061 tms
 	.next_y       (next_y),
 	.vblank_start (vblank_start),
 	.h_end_sync   (h_end_sync),
+	.h_end_blank  (h_end_blank),
 	.dispstart    (dispstart),
 	.display_on   (display_on),
-	.irq          ()
+	.irq          (tms_irq)
 );
 
 assign dbg_vcnt = vcnt;
@@ -157,6 +173,8 @@ it8_blitter blitter
 	.reg_wdata (blt_wdata),
 	.reg_rdata (blt_rdata),
 	.grom_bank (grom_bank),
+	.grom_size (grom_size),
+	.an        (an),
 	.xyaddress (xyaddress),
 	.xyoffset  (xyoffset),
 	.latch     (latch),
@@ -218,26 +236,45 @@ it8_vram vram
 );
 
 // ---------------------------------------------------------------------------
-// Line fetch: at the end of each line, load the row for the next one.
+// Line fetch: at the end of each line, load the row for the next one. In
+// two_layer mode the bottom layer's row (page 1) comes first, then, once its
+// last chunk is written, the top layer's (page 0) into the nibble buffer.
 
 reg   [7:0] col_off;
+reg   [7:0] top_row;
+reg         top_next;             // the top layer's fetch is still to start
+reg         top_fill;             // line buffer writes go to the top buffer
 
 always @(posedge clk) begin
 	fetch_start <= 1'b0;
-	if (reset) col_off <= 8'd0;
+	if (reset) begin
+		col_off  <= 8'd0;
+		top_next <= 1'b0;
+		top_fill <= 1'b0;
+	end
 	else if (line_start && next_visible) begin
 		fetch_start <= 1'b1;
-		fetch_row   <= {page_sel, dispstart[9:2] + next_y};
+		fetch_row   <= {two_layer | page_sel, dispstart[9:2] + next_y};
 		col_off     <= {dispstart[1:0], 6'd0};
+		top_row     <= dispstart[9:2] + next_y;
+		top_next    <= two_layer;
+		top_fill    <= 1'b0;
+	end
+	else if (top_next && lb_we && lb_waddr == 5'd31) begin
+		fetch_start <= 1'b1;
+		fetch_row   <= {1'b0, top_row};
+		top_next    <= 1'b0;
+		top_fill    <= 1'b1;
 	end
 end
 
 // ---------------------------------------------------------------------------
 // Line buffer and display pipeline
 
-wire  [7:0] disp_col = hcnt[7:0] - h_end_sync[7:0] + col_off;
+wire  [7:0] disp_col = hcnt[7:0] - (two_layer ? h_end_blank[7:0] : h_end_sync[7:0]) + col_off;
 reg   [2:0] lane;
 wire [127:0] lb_rdata;
+wire  [31:0] tb_rdata;
 
 it8_sdpram #(.AW(5), .DW(128)) line_buf
 (
@@ -246,16 +283,37 @@ it8_sdpram #(.AW(5), .DW(128)) line_buf
 	.rd_data (lb_rdata),
 	.wr_addr (lb_waddr),
 	.wr_data (lb_wdata),
-	.wr_en   (lb_we)
+	.wr_en   (lb_we & ~top_fill)
+);
+
+// Top layer: the low nibble of each page 0 byte, eight per chunk.
+wire [31:0] tb_wdata;
+genvar tl;
+generate
+	for (tl = 0; tl < 8; tl = tl + 1) begin : top_lane
+		assign tb_wdata[4*tl +: 4] = lb_wdata[16*tl+8 +: 4];
+	end
+endgenerate
+
+it8_sdpram #(.AW(5), .DW(32)) top_buf
+(
+	.clk     (clk),
+	.rd_addr (disp_col[7:3]),
+	.rd_data (tb_rdata),
+	.wr_addr (lb_waddr),
+	.wr_data (tb_wdata),
+	.wr_en   (lb_we & top_fill)
 );
 
 always @(posedge clk) lane <= disp_col[2:0];
 wire [15:0] lb_cell = lb_rdata[16*lane +: 16];   // {vram, latch} for this character
+wire  [3:0] tb_nib  = tb_rdata[4*lane +: 4];
 
 // Stage 1 (on pix_ce): pixel value and raster flags for this dot.
 reg   [7:0] s1_pix;
 reg         s1_hs, s1_vs, s1_hb, s1_vb, s1_on;
-wire  [7:0] pix_val = pix_left ? {lb_cell[7:4], lb_cell[15:12]} : {lb_cell[3:0], lb_cell[11:8]};
+wire  [7:0] pix_val = two_layer ? ((tb_nib != 4'h0) ? {4'h0, tb_nib} : lb_cell[15:8]) :
+                      pix_left  ? {lb_cell[7:4], lb_cell[15:12]} : {lb_cell[3:0], lb_cell[11:8]};
 
 always @(posedge clk) begin
 	if (pix_ce) begin
