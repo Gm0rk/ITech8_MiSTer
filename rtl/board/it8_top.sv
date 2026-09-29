@@ -20,6 +20,14 @@
 //  (held until acknowledged), level 2 from the blitter (until its status
 //  register is read).
 //
+//  cpu09 turns the board into a 6809 board of Strata Bowling style (MAME
+//  itech8.cpp stratab_hi): the 68000 is held in reset and it8_main09 drives
+//  the same video section (in its two_layer mode, 6 MHz dots), the NVRAM
+//  (8 KB of it) and the sound board (in its YM2203 mode). Input ports as
+//  MAME's stratab: port 40 service, cabinet and the sound board's feedback
+//  bit; port 60 hooks, starts and coins; trackball on blitter registers
+//  12-15.
+//
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
@@ -39,6 +47,13 @@ module it8_top
 	input             snd_fall_q,
 	input             ym_cen,
 	input             oki_cen,
+	input             vid6_ce,        // 6 MHz, 6809 board dots
+
+	// Board variant
+	input             cpu09,          // 6809 board (see above)
+	input             bank_xor,       // 6809: program bank bit inverted
+	input             prog64,         // 6809: 64 KB program, fixed area is its upper half
+	input      [23:0] grom_size,      // graphics ROM region in bytes
 
 	// Controls, active high
 	input       [7:0] p1,             // {punch, kick, right, left, down, up, start, throw}
@@ -47,6 +62,8 @@ module it8_top
 	input             coin2,
 	input             service,
 	input             test,
+	input       [7:0] track_x,        // trackball counters (cb_trackball)
+	input       [7:0] track_y,
 
 	// SDRAM: 68000 program ROM
 	output            rom_req,
@@ -95,19 +112,20 @@ module it8_top
 	input       [1:0] mix_sel,
 	output     [15:0] audio,
 
-	// Debug
-	output reg [23:0] dbg_pc,         // last program fetch
-	output reg [15:0] dbg_frames,
-	output reg [15:0] dbg_irq3,
-	output reg [15:0] dbg_irq2,
-	output reg [15:0] dbg_waits,      // 68000 ROM reads that needed a wait state
+	// Debug (6809 board: bus address, NMIs for level 3, FIRQs for level 2,
+	// stretched E cycles for wait states)
+	output     [23:0] dbg_pc,         // last program fetch
+	output     [15:0] dbg_frames,
+	output     [15:0] dbg_irq3,
+	output     [15:0] dbg_irq2,
+	output     [15:0] dbg_waits,      // 68000 ROM reads that needed a wait state
 	output     [15:0] dbg_blits,
 	output     [15:0] dbg_blit_late,
 	output     [15:0] dbg_vram_drop,
 	output     [15:0] dbg_snd_cmds,
 	output      [7:0] dbg_snd_last,
 	output     [15:0] dbg_snd_pc,
-	output reg  [7:0] dbg_page,
+	output      [7:0] dbg_page,       // 6809 board: the graphics ROM bank
 	output reg [31:0] dbg_nv104       // last value seen at RAM 0x104 (long)
 );
 
@@ -126,8 +144,8 @@ fx68k cpu
 (
 	.clk      (clk),
 	.HALTn    (1'b1),
-	.extReset (reset),
-	.pwrUp    (reset),
+	.extReset (reset | cpu09),
+	.pwrUp    (reset | cpu09),
 	.enPhi1   (cpu_phi1 & ~hold),
 	.enPhi2   (cpu_phi2 & ~hold),
 	.eRWn     (eRWn),
@@ -201,6 +219,7 @@ reg   [7:0] vec[0:7];
 // Board registers
 reg   [7:0] grom_bank;
 reg         page_sel;
+reg   [7:0] m68_page;
 reg         vbl_irq;
 
 // Device strobes
@@ -216,15 +235,22 @@ wire  [7:0] tms_rdata, blt_rdata, dac_rdata;
 wire        blt_irq;
 wire        vblank_start;
 
-assign rom_req   = as && rom_read && !rom_taken;
-assign rom_addr  = a[22:1];
-assign rom_quiet = reset || (as && !(rom_read && !rom_taken));
+wire        m9_rom_req, m9_rom_quiet;
+wire [21:0] m9_rom_addr;
+wire [12:0] m9_nv_addr;
+wire [15:0] m9_nv_din;
+wire  [1:0] m9_nv_we;
+wire        m9_nv_written;
+
+assign rom_req   = cpu09 ? m9_rom_req   : as && rom_read && !rom_taken;
+assign rom_addr  = cpu09 ? m9_rom_addr  : a[22:1];
+assign rom_quiet = cpu09 ? m9_rom_quiet : reset || (as && !(rom_read && !rom_taken));
 assign DTACKn    = ~(dtack | (as && rom_read && (rom_valid || rom_ack)));
 assign VPAn      = ~(as && iack);
 
 wire [15:0] nv_q;
 wire  [1:0] nv_we_cpu = (as && sel_ram && !rd && bst == B_IDLE && ds) ? {uds, lds} : 2'b00;
-assign      nv_written = |nv_we_cpu;
+assign      nv_written = cpu09 ? m9_nv_written : |nv_we_cpu;
 
 
 // Controls, active low on the board.
@@ -244,7 +270,7 @@ always @(posedge clk) begin
 	if (rom_accept) rom_taken <= 1'b1;
 	if (rom_ack)    rom_valid <= 1'b1;
 
-	if (reset) begin
+	if (reset || cpu09) begin
 		bst        <= B_IDLE;
 		dtack      <= 1'b0;
 		rom_taken  <= 1'b0;
@@ -252,7 +278,7 @@ always @(posedge clk) begin
 		grom_bank  <= 8'd0;
 		page_sel   <= 1'b0;
 		vbl_irq    <= 1'b0;
-		dbg_page   <= 8'h00;
+		m68_page   <= 8'h00;
 	end
 	else if (!as) begin
 		bst       <= B_IDLE;
@@ -289,7 +315,7 @@ always @(posedge clk) begin
 				if (io_in40 && uds)  grom_bank <= oEdb[15:8];
 				if (io_in60 && uds) begin
 					page_sel <= oEdb[15];
-					dbg_page <= oEdb[15:8];
+					m68_page <= oEdb[15:8];
 				end
 				if (io_blt) begin
 					blt_idx <= a[4:1];
@@ -394,9 +420,9 @@ always @(posedge clk) if (vec_we) vec[vec_addr] <= vec_din;
 it8_nvram nvram
 (
 	.clk      (clk),
-	.cpu_addr (a[13:1]),
-	.cpu_din  (oEdb),
-	.cpu_we   (nv_we_cpu),
+	.cpu_addr (cpu09 ? m9_nv_addr : a[13:1]),
+	.cpu_din  (cpu09 ? m9_nv_din  : oEdb),
+	.cpu_we   (cpu09 ? m9_nv_we   : nv_we_cpu),
 	.cpu_dout (nv_q),
 	.hps_addr (nv_addr),
 	.hps_din  (nv_din),
@@ -405,35 +431,52 @@ it8_nvram nvram
 );
 
 // ---------------------------------------------------------------------------
+// 6809 main CPU's device lines (it8_main09, below)
+
+wire        m9_tms_start, m9_tms_we, m9_latch_we, m9_blt_we, m9_blt_re;
+wire        m9_dac_we, m9_snd_we;
+wire [11:0] m9_tms_offs;
+wire  [3:0] m9_blt_idx;
+wire  [1:0] m9_dac_idx;
+wire  [7:0] m9_wdata, m9_grom_bank, m9_page;
+wire [31:0] m9_an;
+wire        tms_irq, special;
+wire [15:0] m9_pc, m9_frames, m9_nmi, m9_firq, m9_waits;
+
+// ---------------------------------------------------------------------------
 // Video
 
 it8_video video
 (
 	.clk           (clk),
 	.reset         (reset),
-	.pix_ce        (pix_ce),
-	.chr_ce        (chr_ce),
-	.pix_left      (pix_left),
-	.page_sel      (page_sel),
-	.grom_bank     (grom_bank),
-	.tms_start     (tms_start),
-	.tms_offs      (tms_offs),
-	.tms_we        (tms_we),
-	.tms_wdata     (tms_wdata),
+	.pix_ce        (cpu09 ? vid6_ce : pix_ce),
+	.chr_ce        (cpu09 ? vid6_ce : chr_ce),
+	.pix_left      (cpu09 | pix_left),
+	.two_layer     (cpu09),
+	.page_sel      (cpu09 ? m9_page[7] : page_sel),
+	.grom_bank     (cpu09 ? m9_grom_bank : grom_bank),
+	.grom_size     (grom_size),
+	.an            (cpu09 ? m9_an : 32'd0),
+	.tms_irq       (tms_irq),
+	.tms_start     (cpu09 ? m9_tms_start : tms_start),
+	.tms_offs      (cpu09 ? m9_tms_offs  : tms_offs),
+	.tms_we        (cpu09 ? m9_tms_we    : tms_we),
+	.tms_wdata     (cpu09 ? m9_wdata     : tms_wdata),
 	.tms_done      (tms_done),
 	.tms_rdata     (tms_rdata),
-	.latch_we      (latch_we),
-	.latch_wdata   (dev_wdata),
-	.blt_we        (blt_we),
-	.blt_re        (blt_re),
-	.blt_idx       (blt_idx),
-	.blt_wdata     (blt_wdata),
+	.latch_we      (cpu09 ? m9_latch_we  : latch_we),
+	.latch_wdata   (cpu09 ? m9_wdata     : dev_wdata),
+	.blt_we        (cpu09 ? m9_blt_we    : blt_we),
+	.blt_re        (cpu09 ? m9_blt_re    : blt_re),
+	.blt_idx       (cpu09 ? m9_blt_idx   : blt_idx),
+	.blt_wdata     (cpu09 ? m9_wdata     : blt_wdata),
 	.blt_rdata     (blt_rdata),
 	.blt_irq       (blt_irq),
-	.dac_we        (dac_we),
-	.dac_re        (dac_re),
-	.dac_idx       (a[6:5]),
-	.dac_wdata     (dev_wdata),
+	.dac_we        (cpu09 ? m9_dac_we    : dac_we),
+	.dac_re        (dac_re & ~cpu09),
+	.dac_idx       (cpu09 ? m9_dac_idx   : a[6:5]),
+	.dac_wdata     (cpu09 ? m9_wdata     : dev_wdata),
 	.dac_rdata     (dac_rdata),
 	.rom_addr      (grom_addr),
 	.rom_req       (grom_req),
@@ -455,6 +498,65 @@ it8_video video
 );
 
 // ---------------------------------------------------------------------------
+// 6809 main CPU (cpu09)
+
+
+// Strata Bowling's input ports (MAME INPUT_PORTS stratab), active low
+// except the sound board's feedback bit.
+wire  [7:0] in40_09 = {~(service | test), 3'b111, 1'b1, 2'b11, special};
+wire  [7:0] in60_09 = ~{coin1, coin2, p1[1], p2[1], p1[7], p1[6], p2[7], p2[6]};
+
+it8_main09 main09
+(
+	.clk          (clk),
+	.reset        (reset | ~cpu09),
+	.hold         (hold),
+	.bank_xor     (bank_xor),
+	.prog64       (prog64),
+	.in40         (in40_09),
+	.in60         (in60_09),
+	.in80         (8'hFF),
+	.track_x      (track_x),
+	.track_y      (track_y),
+	.rom_req      (m9_rom_req),
+	.rom_addr     (m9_rom_addr),
+	.rom_accept   (rom_accept),
+	.rom_ack      (rom_ack),
+	.rom_data     (rom_data),
+	.rom_quiet    (m9_rom_quiet),
+	.tms_start    (m9_tms_start),
+	.tms_offs     (m9_tms_offs),
+	.tms_we       (m9_tms_we),
+	.tms_done     (tms_done),
+	.tms_rdata    (tms_rdata),
+	.latch_we     (m9_latch_we),
+	.blt_we       (m9_blt_we),
+	.blt_re       (m9_blt_re),
+	.blt_idx      (m9_blt_idx),
+	.blt_rdata    (blt_rdata),
+	.dac_we       (m9_dac_we),
+	.dac_idx      (m9_dac_idx),
+	.snd_we       (m9_snd_we),
+	.wdata        (m9_wdata),
+	.grom_bank    (m9_grom_bank),
+	.page         (m9_page),
+	.an           (m9_an),
+	.nv_addr      (m9_nv_addr),
+	.nv_din       (m9_nv_din),
+	.nv_we        (m9_nv_we),
+	.nv_q         (nv_q),
+	.nv_written   (m9_nv_written),
+	.vblank_start (vblank_start),
+	.tms_irq      (tms_irq),
+	.blt_irq      (blt_irq),
+	.dbg_pc       (m9_pc),
+	.dbg_frames   (m9_frames),
+	.dbg_nmi      (m9_nmi),
+	.dbg_firq     (m9_firq),
+	.dbg_waits    (m9_waits)
+);
+
+// ---------------------------------------------------------------------------
 // Sound board
 
 it8_sound sound
@@ -465,8 +567,9 @@ it8_sound sound
 	.fall_q       (snd_fall_q),
 	.ym_cen       (ym_cen),
 	.oki_cen      (oki_cen),
-	.cmd_we       (snd_we),
-	.cmd          (dev_wdata),
+	.ym2203       (cpu09),
+	.cmd_we       (cpu09 ? m9_snd_we : snd_we),
+	.cmd          (cpu09 ? m9_wdata  : dev_wdata),
 	.rom_we       (snd_rom_we),
 	.rom_addr     (snd_rom_addr),
 	.rom_din      (snd_rom_din),
@@ -477,6 +580,7 @@ it8_sound sound
 	.mix_sel      (mix_sel),
 	.audio        (audio),
 	.via_pb       (),
+	.special      (special),
 	.dbg_cmds     (dbg_snd_cmds),
 	.dbg_last_cmd (dbg_snd_last),
 	.dbg_pc       (dbg_snd_pc)
@@ -485,23 +589,33 @@ it8_sound sound
 // ---------------------------------------------------------------------------
 // Debug counters
 
-reg as_d;
+reg        as_d;
+reg [23:0] m68_pc;
+reg [15:0] m68_frames, m68_irq3, m68_irq2, m68_waits;
+
+assign dbg_pc     = cpu09 ? {8'd0, m9_pc} : m68_pc;
+assign dbg_frames = cpu09 ? m9_frames     : m68_frames;
+assign dbg_irq3   = cpu09 ? m9_nmi        : m68_irq3;
+assign dbg_irq2   = cpu09 ? m9_firq       : m68_irq2;
+assign dbg_waits  = cpu09 ? m9_waits      : m68_waits;
+assign dbg_page   = cpu09 ? m9_grom_bank  : m68_page;
+
 always @(posedge clk) begin
 	as_d <= as;
 	if (reset) begin
-		dbg_frames <= 16'd0;
-		dbg_irq3   <= 16'd0;
-		dbg_irq2   <= 16'd0;
-		dbg_waits  <= 16'd0;
+		m68_frames <= 16'd0;
+		m68_irq3   <= 16'd0;
+		m68_irq2   <= 16'd0;
+		m68_waits  <= 16'd0;
 	end
 	else begin
-		if (vblank_start) dbg_frames <= dbg_frames + 16'd1;
-		if (as && !as_d && iack && a[3:1] == 3'd3) dbg_irq3 <= dbg_irq3 + 16'd1;
-		if (as && !as_d && iack && a[3:1] == 3'd2) dbg_irq2 <= dbg_irq2 + 16'd1;
+		if (vblank_start) m68_frames <= m68_frames + 16'd1;
+		if (as && !as_d && iack && a[3:1] == 3'd3) m68_irq3 <= m68_irq3 + 16'd1;
+		if (as && !as_d && iack && a[3:1] == 3'd2) m68_irq2 <= m68_irq2 + 16'd1;
 		// The DTACK sample for a zero-wait ROM read is the second ph2 clock
 		// after AS; anything later is a wait state.
-		if (as && rom_read && cpu_phi2 && !rom_valid && !rom_ack && rom_taken) dbg_waits <= dbg_waits + 16'd1;
-		if (as && !as_d && !FC0 && FC1) dbg_pc <= a;
+		if (as && rom_read && cpu_phi2 && !rom_valid && !rom_ack && rom_taken) m68_waits <= m68_waits + 16'd1;
+		if (as && !as_d && !FC0 && FC1) m68_pc <= a;
 	end
 end
 
