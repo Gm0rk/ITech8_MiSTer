@@ -1,9 +1,9 @@
 <misterromdescription>
     <name>Ninja Clowns (27 oct 91)</name>
     <setname>ninclown</setname>
-    <rbf>Arcade-ITech8</rbf>
+    <rbf>ITech8</rbf>
     <mameversion>0289</mameversion>
-    <mratimestamp>20260926</mratimestamp>
+    <mratimestamp>20260928</mratimestamp>
     <year>1991</year>
     <manufacturer>Strata / Incredible Technologies</manufacturer>
     <category>Fighter</category>
@@ -14,12 +14,17 @@
     <buttons names="Punch,Kick,Throw,Start,Coin,Service" default="A,B,X,Start,R,L"/>
 
     <romstruct>
+Board select (ioctl index 1): 00 = IT 8-bit 68000 board.
 Download stream (ioctl index 0), 2,129,920 bytes:
 000000 - 03FFFF  256K  68000 program, 68000 byte order  -> SDRAM bank 0
 040000 - 1BFFFF  1.5M  graphics ROMs 0-5 (blitter)      -> SDRAM bank 1
 1C0000 - 1FFFFF  256K  OKI M6295 samples                -> SDRAM bank 2
 200000 - 207FFF   32K  6809 sound program               -> block RAM
     </romstruct>
+
+    <rom index="1">
+        <part>00</part>
+    </rom>
 
     <rom index="0" zip="ninclown.zip" md5="f449778faa393bf8080bf702f40c72f6">
 
