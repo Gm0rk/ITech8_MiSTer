@@ -11,7 +11,7 @@
     <joystick>trackball</joystick>
     <rotation>vertical (ccw)</rotation>
     <num_buttons>2</num_buttons>
-    <buttons names="Hook Left,Hook Right,Unused,Start,Coin,Service" default="A,B,X,Start,R,L"/>
+    <buttons names="Hook Left,Hook Right,Start,Coin,Service" default="A,B,Start,R,L"/>
 
     <romstruct>
 Board select (ioctl index 1): C3 = itech8 6809 board (3), trackball (bit 6),
