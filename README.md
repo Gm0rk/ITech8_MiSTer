@@ -35,7 +35,7 @@ ball-sensor board.
 | Golden Tee Golf II | 1992 | 6809 | Not started |
 | Hot Shots Tennis | 1990 | 6809 | Not started |
 | Neck'N'Neck | 1992 | 6809 | Not started |
-| **Ninja Clowns** | 1991 | 68000 | **Fully playable, with sound** |
+| **Ninja Clowns** | 1991 | 68000 | **Playable, with sound** |
 | Peggle | 1991 | 6809 | Not started |
 | Poker Dice | 1991 | 6809 | Not started |
 | Rim Rockin' Basketball | 1991 | 6809 | Not started |
