@@ -6,7 +6,9 @@ platform. It is built on `Template_MiSTer` with rmonic79's CRT Adjust built
 in. **Ninja Clowns** (1991) boots and is fully playable. Capcom Bowling,
 Coors Light Bowling and Bowl-O-Rama, on IT's earlier bowling board, are
 playable with sound too, and so is **Strata Bowling** (1990), the first
-game on the 6809 blitter board.
+game on the 6809 blitter board. **Golden Tee Golf**, **Golden Tee Golf II**
+and **Golden Par Golf**, on the same board, are new and not yet tested on
+hardware.
 
 > **This core was made with AI.** The RTL and documentation were written in
 > collaboration with an AI assistant (Claude, by Anthropic).
@@ -16,33 +18,34 @@ game on the 6809 blitter board.
 
 ## Games
 
-[System 16](https://www.system16.com/hardware.php?id=805) lists seventeen
-games on Incredible Technologies' 8-bit hardware. This core implements three
-of the boards: the 68000 board, which only Ninja Clowns uses, the earlier
-bowling board ¹, and the 6809 blitter board ², so far for Strata Bowling.
-The other 6809 games need their own controls and, for most, other screen
-layouts; Dyno Bop, Slick Shot and Super Strike Bowling also need the Z80
-ball-sensor board.
+The table lists every game MAME runs on Incredible Technologies' 8-bit
+hardware: the bowling games in its `capbowl` driver, the rest in its
+`itech8` driver. This core implements three of the boards: the 68000
+board, which only Ninja Clowns uses, the earlier bowling board ¹, and the
+6809 blitter board ², so far for Strata Bowling, Golden Tee Golf, Golden
+Tee Golf II and Golden Par Golf. The other 6809 games need their own
+controls and, for most, other screen layouts. Four games are not planned ³.
 
 | Game | Year | Main CPU | Status |
 |---|---|---|---|
-| Arlington Horse Racing | 1991 | 6809 | Not started |
+| Arlington Horse Racing (v1.40-D, v1.21-I, v1.21-D) | 1991 | 6809 | Not started |
 | **Bowl-O-Rama** | 1991 | 6809 ¹ | **Playable, with sound** |
 | **Capcom Bowling** (sets 1-4), **Coors Light Bowling** | 1988-89 | 6809 ¹ | **Playable, with sound** |
-| Dyno Bop | 1990 | 6809, Z80 ball sensors | Not started |
-| Golden Par Golf | 1992 | 6809 | Not started |
-| Golden Tee Golf | 1990 | 6809 | Not started |
-| Golden Tee Golf II | 1992 | 6809 | Not started |
-| Hot Shots Tennis | 1990 | 6809 | Not started |
-| Neck'N'Neck | 1992 | 6809 | Not started |
+| Dyno Bop (v1.1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
+| **Golden Par Golf** (joystick v1.1, v1.0) | 1991-92 | 6809 ² | **Added**, not yet tested on hardware |
+| **Golden Tee Golf** (joystick v3.3, v3.1; trackball v2.1, v2.0, v1.0) | 1989-90 | 6809 ² | **Added**, not yet tested on hardware |
+| **Golden Tee Golf II** (trackball v2.2, v1.1; joystick v1.0) | 1989-92 | 6809 ² | **Added**, not yet tested on hardware |
+| Grudge Match (Yankee Game Technology) | 1989 | 6809 | Not started |
+| Hot Shots Tennis (v1.1, v1.0) | 1990 | 6809 | Not started |
+| Neck-N-Neck (v1.2) | 1992 | 6809 | Not started |
 | **Ninja Clowns** | 1991 | 68000 | **Playable, with sound** |
-| Peggle | 1991 | 6809 | Not started |
-| Poker Dice | 1991 | 6809 | Not started |
-| Rim Rockin' Basketball | 1991 | 6809 | Not started |
-| Slick Shot | 1990 | 6809, Z80 ball sensors | Not started |
+| Peggle (joystick, trackball) | 1991 | 6809 | Not started |
+| Poker Dice (v1.7) | 1991 | 6809 | Not planned ³ |
+| Rim Rockin' Basketball (v2.2, v2.0, v1.6, v1.5, v1.2) | 1991 | 6809 | Not started |
+| Slick Shot (v2.2, v1.7, v1.6) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 | **Strata Bowling** (V3, V1) | 1990 | 6809 ² | **Playable, with sound** |
-| Super Strike Bowling | 1990 | 6809, Z80 ball sensors | Not started |
-| Wheel Of Fortune | 1989 | 6809 | Not started |
+| Super Strike Bowling (v1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
+| Wheel Of Fortune (sets 1, 2) | 1989 | 6809 | Not started |
 
 ¹ The earlier IT bowling board (MAME's `capbowl` driver): TMS34061 video
 with a 16-colour palette on every line but no ITV4400 blitter, a trackball,
@@ -54,7 +57,16 @@ games are in MAME's `itech8` driver.
 ITV4400 blitter and RAMDAC as Ninja Clowns with a 6809 main CPU, and a 6809
 sound CPU with a YM2203 and an OKI M6295. Strata Bowling shows two layers,
 an 8-bit background and a 16-colour foreground, on a vertical monitor, and
-plays with a trackball.
+plays with a trackball. Golden Tee Golf and Golden Tee Golf II are the
+same board on a horizontal monitor, with a stick and a Swing button or a
+trackball; Golden Par Golf and Golden Tee Golf II v2.2 are IT's 1992 board,
+with its I/O at other addresses and Ninja Clowns' YM3812 sound board.
+
+³ Not planned for now: Dyno Bop, Poker Dice, Slick Shot and Super Strike
+Bowling, and the Strata Bowling v1 set built on Super Strike Bowling's
+board (MAME's `stratabs`). Their cabinets use their own physical controls,
+which a MiSTer setup is unlikely to reproduce well. MAME lists Dyno Bop,
+Slick Shot and Super Strike Bowling as mechanical games.
 
 ## Progress
 
@@ -62,7 +74,7 @@ plays with a trackball.
 Ninja Clowns board    [##########]  10/10 sections working on hardware
 Bowling board         [########--]   8/10 sections confirmed on hardware
 6809 blitter board    [########--]   8/10 sections confirmed on hardware
-Games                 [##--------]   4/17 playable
+Games                 [#####-----]   7/14 added, 4 playable on hardware (4 not planned)
 ```
 
 The Ninja Clowns board's ten sections are the 68000 and memory map, SDRAM
@@ -80,29 +92,30 @@ and their reasons are in `DECISIONS.md`.
 
 ## At a glance
 
-| | Ninja Clowns board | Bowling board | 6809 blitter board (Strata Bowling) |
+| | Ninja Clowns board | Bowling board | 6809 blitter board (Strata Bowling, golf) |
 |---|---|---|---|
-| Board | IT 8-bit, 68000 variant: lower board P/N 1029 REV3A and YM3812 sound board P/N 1038 REV2 | IT bowling board (1988); Bowl-O-Rama adds a turbo board | IT 8-bit, 6809 variant, Strata Bowling style (single board) |
+| Board | IT 8-bit, 68000 variant: lower board P/N 1029 REV3A and YM3812 sound board P/N 1038 REV2 | IT bowling board (1988); Bowl-O-Rama adds a turbo board | IT 8-bit, 6809 variant, Strata Bowling style (single board); Golden Par Golf and Golden Tee Golf II v2.2: the 1992 board P/N 1047 with the YM3812 sound board P/N 1038 |
 | Main CPU | 68000 @ 12 MHz | 6809 @ 2 MHz | 6809 @ 2 MHz |
-| Sound | 6809 @ 2 MHz, YM3812, OKI M6295, 6522 VIA | 6809 @ 2 MHz, YM2203, DAC | 6809 @ 2 MHz, YM2203, OKI M6295 |
+| Sound | 6809 @ 2 MHz, YM3812, OKI M6295, 6522 VIA | 6809 @ 2 MHz, YM2203, DAC | 6809 @ 2 MHz, YM2203, OKI M6295 (Golden Par Golf, Golden Tee Golf II v2.2: Ninja Clowns' sound board) |
 | Video | TMS34061 and ITV4400 blitter, two 512 × 256 VRAM pages, MS176 RAMDAC (256 colours) | TMS34061, 64 KB VRAM, 16 colours per line from 4096 | TMS34061 and ITV4400 blitter, a 256 × 256 8-bit background and a 4-bit foreground, 6-bit RAMDAC (256 colours) |
-| Display | 362 × 240, 15.686 kHz, 59.64 Hz | 360 × 245 (Bowl-O-Rama 240), vertical, 15.81 kHz, about 60 Hz | 256 × 240, vertical, 15.71 kHz, 59.7 Hz |
-| Controls | 8-way stick, 3 buttons | trackball (mouse or stick), 2 hook buttons | trackball (mouse or stick), 2 hook buttons |
+| Display | 362 × 240, 15.686 kHz, 59.64 Hz | 360 × 245 (Bowl-O-Rama 240), vertical, 15.81 kHz, about 60 Hz | 256 × 240, 15.71 kHz, 59.7 Hz; vertical (Strata Bowling) or horizontal (golf) |
+| Controls | 8-way stick, 3 buttons | trackball (mouse or stick), 2 hook buttons | trackball (mouse or stick) and 2 buttons; or 8-way stick and Swing (golf joystick sets) |
 | NVRAM | 16 KB | 2 KB | 8 KB |
 
 All use 2 MB of SDRAM or less (any MiSTer SDRAM module) and save NVRAM to
 the SD card. The analog picture is centred on a standard 15 kHz screen in
 every game, the vertical ones on a rotated monitor included: the sync
 pulses are placed where such a screen expects them around the picture, so
-it sits in the middle with equal margins. CRT Adjust (Auto-Fill, H-Size,
+it sits in the middle with equal margins. CRT Adjust (Auto-Width, H-Size,
 H-Position, V-Shift) works from there, so H-Position and V-Shift at 0 are
-the centre. **CRT Auto-Fill** widens each game's picture to 50.5 µs, so
-that on a screen with ordinary overscan it reaches the edges with only a
-few dots hidden; H-Size then trims it about the middle of the screen (each
-step about 2 %), for a screen with more or less overscan. The height is the
-monitor's own (its vertical size): the games send 240 or 245 lines, so a
-screen set up for 224-line consoles cuts some at the top and bottom, and
-V-Shift chooses which end loses more. The bowling games are turned for
+the centre. **CRT Auto-Width** widens each game's picture to 48.75 µs, so
+that on a screen with ordinary overscan it reaches close to the edges
+without stretching the picture much wider than its height allows; H-Size
+then trims it about the middle of the screen (each step about 2 %, about
+1.6 % on the 6809 blitter board), for a screen with more or less overscan.
+The height is the monitor's own (its vertical size): the games send 240 or
+245 lines, so a screen set up for 224-line consoles cuts some at the top
+and bottom, and V-Shift chooses which end loses more. The bowling games are turned for
 a horizontal screen through MiSTer's frame buffer, or left vertical for a
 rotated monitor.
 
@@ -115,7 +128,10 @@ ROMs are not included. Copy:
 * the MAME ROM sets to `games/mame/`: `ninclown.zip`; `capbowl.zip` (with
   `capbowl2.zip`-`capbowl4.zip` and `clbowl.zip`, or one merged
   `capbowl.zip`); `bowlrama.zip`; `stratab.zip` (with `stratab1.zip` for
-  V1, or one merged `stratab.zip`)
+  V1, or one merged `stratab.zip`); `gtg.zip` (with `gtgj31.zip`,
+  `gtgt21.zip`, `gtgt20.zip` and `gtgt10.zip`, or one merged `gtg.zip`);
+  `gtg2.zip` (with `gtg2t.zip` and `gtg2j.zip`, or one merged `gtg2.zip`);
+  `gpgolf.zip` (with `gpgolfa.zip` for v1.0, or one merged `gpgolf.zip`)
 
 Keep only one ITech8 core in `_Arcade/cores/`: MiSTer loads the matching file
 whose name sorts last.
@@ -131,6 +147,15 @@ the cabinet's second coin slot; Capcom Bowling, Coors Light Bowling and
 Strata Bowling can price it separately. Strata Bowling: roll the
 trackball to pick a game (Strata Bowling, Flash, Strike or Die), then
 Start.
+
+**Golf controls:** the joystick sets (Golden Tee Golf v3.3 and v3.1, Golden
+Tee Golf II v1.0, Golden Par Golf) use the stick and Swing (A), Start, Coin
+(R), Service (L): hold Swing for the backswing and let go for the forward
+swing. The trackball sets (Golden Tee Golf v2.1, v2.0, v1.0, Golden Tee
+Golf II v2.2 and v1.1) use the trackball (the mouse, or the stick), Face Left (A), Face Right (B), Start, Coin (R), Service (L), and OSD
+Trackball Speed: pull the trackball back, then push it forward to swing.
+In both, Start (the games call it Select) confirms the number of golfers,
+one to four, and the course. Upright cabinet only.
 
 **Setup menus**, as the operator manuals describe them:
 
@@ -157,12 +182,12 @@ sideways roll at half the rate of a forward one, by design (the original
 board and MAME do the same).
 
 **OSD:** aspect ratio, scandoubler effects, scaling, CRT Adjust, Service
-Mode and Reset; Ninja Clowns and Strata Bowling add the audio mix (FM + PCM,
-FM only, PCM only); the bowling games add Orientation (Horizontal: turned
+Mode and Reset; Ninja Clowns, Strata Bowling and the golf games add the
+audio mix (FM + PCM, FM only, PCM only); the bowling games add Orientation (Horizontal: turned
 for a normal screen; Vertical: for a monitor turned as in the original
 cabinets, with its left edge at the bottom; Vertical Flip: for a monitor
 turned the other way, on every output, shown one frame later) and
-Trackball Speed.
+Trackball Speed (also in the golf trackball sets).
 
 **NVRAM** (settings, audits and high scores) is saved once each time the OSD
 opens, to `config/nvram/<game name>.nvm`; changing OSD options does not save
@@ -189,7 +214,7 @@ hardware behaviour:
 MAME is a reference for *behaviour*; no MAME code is compiled into this core.
 
 **[System 16](https://www.system16.com/hardware.php?id=805)** for the
-hardware family listing and the game list.
+hardware family listing.
 
 **[fx68k](https://github.com/ijor/fx68k)** by Jorge Cwik: the 68000, cycle
 accurate.
