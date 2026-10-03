@@ -91,16 +91,27 @@ and their reasons are in `DECISIONS.md`.
 | NVRAM | 16 KB | 2 KB | 8 KB |
 
 All use 2 MB of SDRAM or less (any MiSTer SDRAM module) and save NVRAM to
-the SD card. CRT Adjust (H-Size, H-Position, V-Shift) works on the analog
-output at 15 kHz. The bowling games are turned for a horizontal screen
-through MiSTer's frame buffer, or left vertical for a rotated monitor.
+the SD card. The analog picture is centred on a standard 15 kHz screen in
+every game, the vertical ones on a rotated monitor included: the sync
+pulses are placed where such a screen expects them around the picture, so
+it sits in the middle with equal margins. CRT Adjust (Auto-Fill, H-Size,
+H-Position, V-Shift) works from there, so H-Position and V-Shift at 0 are
+the centre. **CRT Auto-Fill** widens each game's picture to 50.5 µs, so
+that on a screen with ordinary overscan it reaches the edges with only a
+few dots hidden; H-Size then trims it about the middle of the screen (each
+step about 2 %), for a screen with more or less overscan. The height is the
+monitor's own (its vertical size): the games send 240 or 245 lines, so a
+screen set up for 224-line consoles cuts some at the top and bottom, and
+V-Shift chooses which end loses more. The bowling games are turned for
+a horizontal screen through MiSTer's frame buffer, or left vertical for a
+rotated monitor.
 
 ## Using the core
 
 ROMs are not included. Copy:
 
 * the MRAs from `mra/` to `_Arcade/`
-* `Arcade-ITech8.rbf` to `_Arcade/cores/`
+* the newest `Arcade-ITech8_YYYYMMDD.rbf` from `releases/` to `_Arcade/cores/`
 * the MAME ROM sets to `games/mame/`: `ninclown.zip`; `capbowl.zip` (with
   `capbowl2.zip`-`capbowl4.zip` and `clbowl.zip`, or one merged
   `capbowl.zip`); `bowlrama.zip`; `stratab.zip` (with `stratab1.zip` for
@@ -113,19 +124,49 @@ whose name sorts last.
 Coin (R), Service (L), the same for both players.
 
 **Bowling controls** (all the bowling games): the trackball is the mouse,
-or the stick; Hook Left (A), Hook Right (B), Start, Coin (R). Capcom
-Bowling and Bowl-O-Rama: hold Service (L, or OSD Service Mode) on the high
-score screen for the setup menu. Strata Bowling: roll the trackball to
-pick a game (Strata Bowling, Flash, Strike or Die), then Start.
+or the stick; Hook Left (A), Hook Right (B), Start, Coin (R), Service (L,
+or OSD Service Mode). The one Start button adds a player each time it is
+pressed, up to four (Bowl-O-Rama five). The second controller's Coin is
+the cabinet's second coin slot; Capcom Bowling, Coors Light Bowling and
+Strata Bowling can price it separately. Strata Bowling: roll the
+trackball to pick a game (Strata Bowling, Flash, Strike or Die), then
+Start.
+
+**Setup menus**, as the operator manuals describe them:
+
+* Capcom Bowling and Coors Light Bowling: hold Service for half a second
+  in attract mode (not during a game). Roll the trackball to an item and
+  press Start; in Adjustments, Hook Left and Hook Right lower and raise the
+  value. Video Tests ends on an 8 × 8 grid, which fills the picture.
+* Bowl-O-Rama: hold Service on the test screen after power-on, or in
+  attract mode with no credits. Audits are at the top, adjustments below:
+  roll the trackball to an item and press any button to change it.
+* Strata Bowling: press Service at any time. Move the trackball up or down
+  to an item and press Start; move it left or right to change a value.
+
+**Trackball feel:** OSD Trackball Speed sets how many mouse counts make one
+trackball count (Fast 1, Normal 2, Slow 4). Each game also has its own
+setting in its setup menu, which changes how fast a roll sends the ball:
+Capcom Bowling and Coors Light Bowling TRACKBALL TYPE, 0 to 4 (factory 3;
+each step lower doubles the ball speed a roll gives); Bowl-O-Rama 2.0, 2.5
+or 4.5 INCH TRACKBALL (a larger size is more sensitive); Strata Bowling
+TRACKBALL SENSITIVITY, level 1 (least force) to level 5 (most force). With
+a Taito Egret II Mini trackball, a tester found Capcom Bowling and Coors Light
+Bowling best at Normal with TRACKBALL TYPE 2. Those two games take a
+sideways roll at half the rate of a forward one, by design (the original
+board and MAME do the same).
 
 **OSD:** aspect ratio, scandoubler effects, scaling, CRT Adjust, Service
 Mode and Reset; Ninja Clowns and Strata Bowling add the audio mix (FM + PCM,
 FM only, PCM only); the bowling games add Orientation (Horizontal: turned
-for a normal screen; Vertical: for a rotated monitor) and Trackball Speed.
+for a normal screen; Vertical: for a monitor turned as in the original
+cabinets, with its left edge at the bottom; Vertical Flip: for a monitor
+turned the other way, on every output, shown one frame later) and
+Trackball Speed.
 
-**NVRAM** (settings, audits and high scores) is saved when the OSD opens, to
-`config/nvram/<game name>.nvm`. Delete that file to return the game to its
-factory settings.
+**NVRAM** (settings, audits and high scores) is saved once each time the OSD
+opens, to `config/nvram/<game name>.nvm`; changing OSD options does not save
+it again. Delete that file to return the game to its factory settings.
 
 ## Credits and references
 
