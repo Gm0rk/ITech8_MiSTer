@@ -8,7 +8,8 @@
 #
 #      board/      main board: top level, clock enables, battery-backed RAM,
 #                  the 6809 main CPU of the 6809 boards (Strata Bowling)
-#      video/      TMS34061, VRAM, ITV4400 blitter, RAMDAC, display path
+#      video/      TMS34061, VRAM, ITV4400 blitter, RAMDAC, display path,
+#                  Vertical Flip frame buffer
 #      sound/      the external YM3812 sound board: 6809 glue, 6522 VIA
 #      mem/        FPGA side only: block RAM templates, SDRAM, ROM loader
 #      debug/      the diagnostic overlay (debug revision)
@@ -34,12 +35,14 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_nvram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_main09.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_top.sv
 
-# --- Video: TMS34061, VRAM, blitter, RAMDAC --------------------------------
+# --- Video: TMS34061, VRAM, blitter, RAMDAC, Vertical Flip, centred sync ---
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_tms34061.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_vram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_blitter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_ramdac.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_flip180.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_sync_center.sv
 
 # --- Sound board -----------------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_via6522.sv
