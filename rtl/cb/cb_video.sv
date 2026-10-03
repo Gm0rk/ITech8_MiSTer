@@ -10,9 +10,13 @@
 //
 //  At the start of every visible line the row is copied into a line buffer
 //  (the VRAM serial port), and the palette bytes into 16 colour registers.
-//  Pixel byte 32 is shown at the first visible count (END BLANK), one byte
-//  per character clock. MAME shows 360 pixels (bytes 32-211); the raster
-//  the game programs has room for 424, and `wide` shows them all.
+//  The serial port starts shifting when horizontal sync ends, one byte per
+//  character clock, so count h shows column h - HESYNC, as on the Ninja
+//  Clowns board (D-006, D-029). MAME shows 360 pixels, bytes 32-211: with
+//  the game's raster that is counts 46-225, ending a count before START
+//  BLANK, with an 8 us back porch after sync. The TMS34061's own window
+//  opens at count 15; its first 31 bytes are the palette and stay blanked.
+//  `wide` shows the whole window.
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -52,7 +56,7 @@ module cb_video
 // TMS34061
 
 wire [15:0] dispstart;
-wire  [9:0] hcnt, vcnt, h_end_blank;
+wire  [9:0] hcnt, vcnt, h_end_sync;
 wire        t_hs, t_vs, t_hb, t_vb, line_start, display_on, next_visible;
 wire  [7:0] next_y;
 
@@ -102,8 +106,8 @@ it8_tms34061 #(.CB(1)) tms
 	.next_visible (next_visible),
 	.next_y       (next_y),
 	.vblank_start (vblank_start),
-	.h_end_sync   (),
-	.h_end_blank  (h_end_blank),
+	.h_end_sync   (h_end_sync),
+	.h_end_blank  (),
 	.dispstart    (dispstart),
 	.display_on   (display_on),
 	.irq          (irq)
@@ -221,15 +225,14 @@ end
 // ---------------------------------------------------------------------------
 // Line buffer and display pipeline
 
-wire  [9:0] vis_idx  = hcnt - h_end_blank;             // visible byte count
-wire  [7:0] disp_col = vis_idx[7:0] + 8'd32;
-wire        in_win   = (vis_idx < (wide ? 10'd212 : 10'd180));
+wire  [9:0] col      = hcnt - h_end_sync;               // VRAM column at this count
+wire        in_win   = wide || (col >= 10'd32 && col < 10'd212);
 wire  [7:0] lb_rdata;
 
 it8_sdpram #(.AW(8), .DW(8)) line_buf
 (
 	.clk     (clk),
-	.rd_addr (disp_col),
+	.rd_addr (col[7:0]),
 	.rd_data (lb_rdata),
 	.wr_addr (lb_waddr),
 	.wr_data (lb_wdata),
