@@ -91,12 +91,13 @@ localparam CONF_STR = {
 	"P1,CRT Adjust;",
 	"P1-;",
 	"P1O[101],CRT Adjust,Off,On;",
+	"H1P1O[102],CRT Auto-Fill,Off,On;",
 	"H1P1O[100:96],CRT H-Size,", CRT_S5, ";",
 	"H1P1O[85:79],CRT H-Position,", CRT_HP, ";",
 	"H1P1O[78:74],CRT V-Shift,", CRT_S5, ";",
 	"-;",
 	"H2O[8:7],Audio,FM + PCM,FM only,PCM only;",
-	"H3O[14],Orientation,Horizontal,Vertical;",
+	"H3O[18:17],Orientation,Horizontal,Vertical,Vertical Flip;",
 	"H4O[16:15],Trackball Speed,Normal,Fast,Slow;",
 	// The board's service switch: on opens the game's service menu.
 	"O[9],Service Mode,Off,On;",
@@ -137,12 +138,23 @@ wire         is_br  = (board_sel == 2'd2);
 wire         is_m09 = (board_sel == 2'd3);
 wire         is_vert = is_cb | (is_m09 & board_byte[7]);
 wire         has_tb  = is_cb | (is_m09 & board_byte[6]);
+wire         flip180 = is_vert & (status[18:17] == 2'd2);   // OSD Orientation "Vertical Flip"
 
 // Declared here because hps_io and the loader use them before the board.
 wire         nv_written;
 reg          nv_dirty = 1'b0;
 wire         nv_io = (ioctl_index[5:0] == 6'd4);
 wire         nv_saving = ioctl_upload & nv_io;
+
+// NVRAM save request (D-032). MiSTer checks it each time the OSD's main page
+// is drawn, which is on opening and again after every option change, and
+// hps_io latches it on a rising edge. These games' battery RAM is their work
+// RAM, written all the time, so the request is held low while the OSD is
+// open: one save as it opens, none while settings are changed, and a new
+// request once it closes.
+reg    [1:0] osd_s = 2'b00;
+always @(posedge clk_sys) osd_s <= {osd_s[0], OSD_STATUS};
+wire         nv_save_req = nv_dirty & ~osd_s[1];
 wire         user_reset = status[0] | buttons[1];
 reg          user_reset_d;
 reg          reset = 1'b1;
@@ -164,7 +176,7 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 
 	.ioctl_download     (ioctl_download),
 	.ioctl_upload       (ioctl_upload),
-	.ioctl_upload_req   (nv_dirty),
+	.ioctl_upload_req   (nv_save_req),
 	.ioctl_upload_index (8'd4),
 	.ioctl_wr           (ioctl_wr),
 	.ioctl_rd           (ioctl_rd),
@@ -372,12 +384,17 @@ always @(posedge clk_sys) begin
 	reset        <= RESET | user_reset | ioctl_download | ~loaded | ~sd_ready | ld_busy;
 end
 
-// MiSTer joystick: [3:0] = up, down, left, right (bit 3 = up); then the J1
-// buttons in order: punch, kick, throw, start, coin, service.
-wire [7:0] p1 = {joystick_0[4], joystick_0[5], joystick_0[0], joystick_0[1],
-                 joystick_0[2], joystick_0[3], joystick_0[7], joystick_0[6]};
-wire [7:0] p2 = {joystick_1[4], joystick_1[5], joystick_1[0], joystick_1[1],
-                 joystick_1[2], joystick_1[3], joystick_1[7], joystick_1[6]};
+// MiSTer joystick: [3:0] = up, down, left, right (bit 3 = up); then the
+// buttons in the order the MRA names them. Ninja Clowns: punch, kick, throw,
+// start, coin, service (bits 4-9). The trackball games have no third button,
+// so their MRAs name five: hook left, hook right, start, coin, service (bits
+// 4-8), and MiSTer asks for nothing it does not use (D-033). j0 and j1 put
+// both in the Ninja Clowns layout, throw reading 0.
+wire [15:0] j0 = has_tb ? {joystick_0[15:10], joystick_0[8:6], 1'b0, joystick_0[5:0]} : joystick_0[15:0];
+wire [15:0] j1 = has_tb ? {joystick_1[15:10], joystick_1[8:6], 1'b0, joystick_1[5:0]} : joystick_1[15:0];
+
+wire [7:0] p1 = {j0[4], j0[5], j0[0], j0[1], j0[2], j0[3], j0[7], j0[6]};
+wire [7:0] p2 = {j1[4], j1[5], j1[0], j1[1], j1[2], j1[3], j1[7], j1[6]};
 
 // Trackball (bowling games): the mouse, or the stick.
 wire [7:0] track_x, track_y;
@@ -387,10 +404,10 @@ cb_trackball trackball
 	.clk       (clk_sys),
 	.reset     (reset),
 	.ps2_mouse (ps2_mouse),
-	.up        (joystick_0[3]),
-	.down      (joystick_0[2]),
-	.left      (joystick_0[1]),
-	.right     (joystick_0[0]),
+	.up        (j0[3]),
+	.down      (j0[2]),
+	.left      (j0[1]),
+	.right     (j0[0]),
 	.speed     (status[16:15]),
 	.per_frame (is_m09),
 	.x         (track_x),
@@ -430,9 +447,9 @@ it8_top board
 	.oki_cen       (oki_cen),
 	.p1            (p1),
 	.p2            (p2),
-	.coin1         (joystick_0[8]),
-	.coin2         (joystick_1[8]),
-	.service       (joystick_0[9] | joystick_1[9]),
+	.coin1         (j0[8]),
+	.coin2         (j1[8]),
+	.service       (j0[9] | j1[9]),
 	.test          (status[9]),
 	.rom_req       (it8_rom_req),
 	.rom_addr      (it8_rom_addr),
@@ -485,8 +502,8 @@ it8_top board
 );
 
 // ---------------------------------------------------------------------------
-// Capcom Bowling board. Controls on the J1 buttons: Hook Left (1), Hook
-// Right (2), Start (4), Coin (5), Service (6); the trackball from the mouse
+// Capcom Bowling board. Controls on the MRA's buttons: Hook Left (1), Hook
+// Right (2), Start (3), Coin (4), Service (5); the trackball from the mouse
 // or the stick.
 
 
@@ -509,14 +526,14 @@ cb_top cb_board
 	.wide         (1'b0),
 	.track_x      (track_x),
 	.track_y      (track_y),
-	.p1_hook_l    (joystick_0[4]),
-	.p1_hook_r    (joystick_0[5]),
-	.p2_hook_l    (joystick_1[4]),
-	.p2_hook_r    (joystick_1[5]),
-	.start        (joystick_0[7] | joystick_1[7]),
-	.coin1        (joystick_0[8]),
-	.coin2        (joystick_1[8]),
-	.service      (joystick_0[9] | joystick_1[9] | status[9]),
+	.p1_hook_l    (j0[4]),
+	.p1_hook_r    (j0[5]),
+	.p2_hook_l    (j1[4]),
+	.p2_hook_r    (j1[5]),
+	.start        (j0[7] | j1[7]),
+	.coin1        (j0[8]),
+	.coin2        (j1[8]),
+	.service      (j0[9] | j1[9] | status[9]),
 	.cocktail     (1'b0),
 	.rom_req      (cb_rom_req),
 	.rom_addr     (cb_rom_addr),
@@ -575,7 +592,9 @@ assign AUDIO_R = audio;
 
 ///////////////////////   DIAGNOSTIC OVERLAY   ///////////////////
 
-wire [7:0] ov_r, ov_g, ov_b;
+// The panel is drawn after Vertical Flip turns the picture (video output
+// section), so it stays upright: ov_hit is a text pixel, ov_blk the box.
+wire ov_hit, ov_blk;
 
 `ifdef IT8_DEBUG
 reg  [8:0] vis_x;
@@ -651,13 +670,11 @@ it8_dbg_text #(
 	.in_box   (ov_box)
 );
 
-assign ov_r = (ov_on && ov_pix) ? 8'hFF : (ov_on && ov_box) ? 8'h00 : core_r;
-assign ov_g = (ov_on && ov_pix) ? 8'hFF : (ov_on && ov_box) ? 8'h00 : core_g;
-assign ov_b = (ov_on && ov_pix) ? 8'hFF : (ov_on && ov_box) ? 8'h00 : core_b;
+assign ov_hit = ov_on & ov_pix;
+assign ov_blk = ov_on & ov_box;
 `else
-assign ov_r = core_r;
-assign ov_g = core_g;
-assign ov_b = core_b;
+assign ov_hit = 1'b0;
+assign ov_blk = 1'b0;
 `endif
 
 ///////////////////////   VIDEO OUTPUT (clk_vid, 96 MHz)   ///////
@@ -665,23 +682,85 @@ assign ov_b = core_b;
 // Bring the pixel stream across. It changes only on ce_pix, a 48 MHz clock
 // after the colour, so sampling on its rising edge sees stable data.
 reg        vce_s, vce_d, ce_vid;
-reg  [7:0] v_r, v_g, v_b;
-reg        v_hs, v_vs, v_hb, v_vb;
+reg  [7:0] c_r, c_g, c_b;
+reg        v_hs, v_vs, v_hb, v_vb, v_ovh, v_ovb;
 
 always @(posedge clk_vid) begin
 	vce_s  <= ce_pix;
 	vce_d  <= vce_s;
 	ce_vid <= vce_s & ~vce_d;
 	if (vce_s & ~vce_d) begin
-		v_r  <= ov_r;
-		v_g  <= ov_g;
-		v_b  <= ov_b;
-		v_hs <= core_hs;
-		v_vs <= core_vs;
-		v_hb <= core_hb;
-		v_vb <= core_vb;
+		c_r   <= core_r;
+		c_g   <= core_g;
+		c_b   <= core_b;
+		v_hs  <= core_hs;
+		v_vs  <= core_vs;
+		v_hb  <= core_hb;
+		v_vb  <= core_vb;
+		v_ovh <= ov_hit;
+		v_ovb <= ov_blk;
 	end
 end
+
+// Vertical Flip (D-031). These boards cannot turn their own picture, and the
+// games redraw moving objects as the beam passes, so the picture is turned
+// through a frame buffer in DDRAM: each frame shows the previous one turned
+// 180 degrees, on every output, with the board's own timing. The DDRAM port
+// is screen_rotate's otherwise (Horizontal); it changes hands only when
+// it8_flip180 has no transfer under way.
+reg  flip_own = 1'b0;
+reg  flip_rst;
+wire flip_idle;
+wire [23:0] f_rgb;
+
+always @(posedge clk_vid) begin
+	flip_rst <= reset;
+	if (flip180)        flip_own <= 1'b1;
+	else if (flip_idle) flip_own <= 1'b0;
+end
+
+wire        fb_rd, fb_we;
+wire  [7:0] fb_burstcnt, fb_be;
+wire [28:0] fb_addr;
+wire [63:0] fb_din;
+
+it8_flip180 flip_fb
+(
+	.clk            (clk_vid),
+	.reset          (flip_rst),
+	.enable         (flip180 & flip_own),
+	.flipping       (),
+	.idle           (flip_idle),
+	.ce             (ce_vid),
+	.rgb_in         ({c_r, c_g, c_b}),
+	.hb_in          (v_hb),
+	.vb_in          (v_vb),
+	.vs_in          (v_vs),
+	.rgb_out        (f_rgb),
+	.ddr_busy       (DDRAM_BUSY),
+	.ddr_burstcnt   (fb_burstcnt),
+	.ddr_addr       (fb_addr),
+	.ddr_dout       (DDRAM_DOUT),
+	.ddr_dout_ready (DDRAM_DOUT_READY),
+	.ddr_rd         (fb_rd),
+	.ddr_din        (fb_din),
+	.ddr_be         (fb_be),
+	.ddr_we         (fb_we),
+	.dbg_late       ()
+);
+
+wire [7:0] v_r = v_ovh ? 8'hFF : v_ovb ? 8'h00 : f_rgb[23:16];
+wire [7:0] v_g = v_ovh ? 8'hFF : v_ovb ? 8'h00 : f_rgb[15:8];
+wire [7:0] v_b = v_ovh ? 8'hFF : v_ovb ? 8'h00 : f_rgb[7:0];
+
+// Centred sync (D-035). The boards place their sync where the game programs
+// the TMS34061, which left the picture up to 2 us left of centre and up to
+// 4 lines off on a 15 kHz screen. New pulses of standard width are placed
+// around the picture the board shows: the middle of the line 35.75 us after
+// HSync, the middle of the frame 138 lines after VSync. The picture and the
+// blanking (so HDMI and the OSD) are untouched; CRT Adjust works from here.
+// it8_sync_center is below, after CRT Adjust's settings.
+wire c_hs, c_vs, c_vb;
 
 wire [7:0] av_r, av_g, av_b;
 wire       av_hs, av_vs, av_de, av_ce;
@@ -694,8 +773,8 @@ arcade_video #(.WIDTH(362), .DW(24)) arcade_video
 	.RGB_in             ({v_r, v_g, v_b}),
 	.HBlank             (v_hb),
 	.VBlank             (v_vb),
-	.HSync              (v_hs),
-	.VSync              (v_vs),
+	.HSync              (c_hs),
+	.VSync              (c_vs),
 	.CLK_VIDEO          (),
 	.CE_PIXEL           (av_ce),
 	.VGA_R              (av_r),
@@ -718,7 +797,7 @@ arcade_video #(.WIDTH(362), .DW(24)) arcade_video
 
 wire scandoubled = (status[5:3] != 3'd0) | forced_scandoubler;
 
-reg              crt_on;
+reg              crt_on, autofill;
 reg signed [4:0] hsize_s;
 reg signed [5:0] vshift_s;
 reg        [6:0] hpos_d;
@@ -726,21 +805,121 @@ reg        [6:0] hpos_d;
 always @(posedge clk_vid) begin
 	if (ce_vid) begin
 		crt_on   <= status[101] & ~scandoubled;
+		autofill <= status[102];
 		hsize_s  <= $signed(status[100:96]);
 		vshift_s <= $signed(status[78:74]);
 		hpos_d   <= status[85:79];
 	end
 end
 
-wire signed [8:0] hpos_off = (hpos_d <= 7'd48) ? $signed({2'b00, hpos_d})
+// The centred sync (above). With CRT Adjust on, the picture leaves its line
+// buffer a line late, so VSync follows it; the line buffer takes VBlank for
+// each line at HSync, which now comes before the board's line starts, so it
+// gets the VBlank of the line that HSync begins (c_vb).
+it8_sync_center sync_center
+(
+	.clk     (clk_vid),
+	.ce      (ce_vid),
+	.dot6    (is_m09),
+	.hs_in   (v_hs),
+	.vs_in   (v_vs),
+	.hb_in   (v_hb),
+	.vb_in   (v_vb),
+	.vlate   (crt_on),
+	.hs_out  (c_hs),
+	.vs_out  (c_vs),
+	.vb_out  (c_vb),
+	.centred (),
+	.pic_dots(pic_dots)
+);
+
+wire signed [8:0] hpos_usr = (hpos_d <= 7'd48) ? $signed({2'b00, hpos_d})
                                                : $signed({2'b00, hpos_d}) - 9'sd97;
+
+// Auto-Fill (D-037): the H-Size that makes the picture 50.5 us wide, about
+// 96 % of a broadcast line (52.66 us), so on a screen with ordinary overscan
+// it reaches the edges with only a few dots hidden. The picture is pic_dots
+// wide and each of its dots lasts (base + H-Size) / 384 us (base 48 at
+// 8 MHz, 64 at 6 MHz), so the read period that fills is
+// 50.5 x 384 / pic_dots = 19392 / pic_dots, rounded: a restoring division,
+// one quotient bit a clock, run over and over. The OSD's H-Size then trims
+// from there. Capcom Bowling and Ninja Clowns come out at +6, Strata Bowling
+// at +12.
+wire [10:0] pic_dots;
+wire  [7:0] rd_base = is_m09 ? 8'd64 : 8'd48;
+
+reg   [3:0] dv_n = 4'd0;              // 0: load, 1-15: quotient bits 14..0
+reg  [14:0] dv_num = 15'd0, dv_q = 15'd0;
+reg  [10:0] dv_den = 11'd0, dv_rem = 11'd0;
+reg   [7:0] fill_per = 8'd0;          // read period that fills; 0 unknown
+
+wire [11:0] dv_try = {dv_rem, dv_num[14]};
+wire        dv_bit = dv_try >= {1'b0, dv_den};
+wire [14:0] dv_qn  = {dv_q[13:0], dv_bit};
+
+always @(posedge clk_vid) begin
+	if (dv_n == 4'd0) begin
+		dv_num <= 15'd19392 + {5'd0, pic_dots[10:1]};
+		dv_den <= pic_dots;
+		dv_rem <= 11'd0;
+		dv_q   <= 15'd0;
+		dv_n   <= 4'd1;
+	end
+	else begin
+		dv_num <= {dv_num[13:0], 1'b0};
+		dv_rem <= dv_bit ? 11'(dv_try - {1'b0, dv_den}) : dv_try[10:0];
+		dv_q   <= dv_qn;
+		dv_n   <= (dv_n == 4'd15) ? 4'd0 : dv_n + 4'd1;
+		if (dv_n == 4'd15)
+			fill_per <= (dv_den >= 11'd128 && dv_qn < 15'd256) ? dv_qn[7:0] : 8'd0;
+	end
+end
+
+// The H-Size in use: Auto-Fill's, if on, plus the OSD's, kept to -16..+31.
+wire signed [8:0] h_fill = (autofill && fill_per != 8'd0)
+                         ? $signed({1'b0, fill_per}) - $signed({1'b0, rd_base}) : 9'sd0;
+wire signed [8:0] h_sum  = h_fill + {{4{hsize_s[4]}}, hsize_s};
+reg  signed [6:0] h_eff = 7'sd0;
+always @(posedge clk_vid)
+	h_eff <= (h_sum < -9'sd16) ? -7'sd16 : (h_sum > 9'sd31) ? 7'sd31 : h_sum[6:0];
+
+// H-Size about the middle of the screen (D-035). CRT Adjust stretches the
+// line from HSync, which would carry the picture's middle, 35.75 us after
+// the centred HSync (286 dots at 8 MHz, 215 at 6 MHz), right as it grows
+// and its right edge past the next HSync. A content shift of
+// -middle x H-Size / (base + H-Size) dots, added to H-Position, holds the
+// middle in place. Indexed by H-Size + 16. One dot less again makes up for
+// the dot CRT Adjust's read pipeline adds to the picture.
+localparam [431:0] HMID8 = {   // H-Size +31 .. -16
+	-9'sd112, -9'sd110, -9'sd108, -9'sd105, -9'sd103, -9'sd100,  -9'sd98,  -9'sd95,
+	 -9'sd93,  -9'sd90,  -9'sd87,  -9'sd84,  -9'sd81,  -9'sd78,  -9'sd75,  -9'sd72,
+	 -9'sd68,  -9'sd65,  -9'sd61,  -9'sd57,  -9'sd53,  -9'sd49,  -9'sd45,  -9'sd41,
+	 -9'sd36,  -9'sd32,  -9'sd27,  -9'sd22,  -9'sd17,  -9'sd11,   -9'sd6,    9'sd0,
+	   9'sd6,   9'sd12,   9'sd19,   9'sd26,   9'sd33,   9'sd41,   9'sd49,   9'sd57,
+	  9'sd66,   9'sd75,   9'sd85,   9'sd95,  9'sd106,  9'sd118,  9'sd130,  9'sd143
+};
+localparam [431:0] HMID6 = {   // H-Size +31 .. -16
+	 -9'sd70,  -9'sd69,  -9'sd67,  -9'sd65,  -9'sd64,  -9'sd62,  -9'sd60,  -9'sd59,
+	 -9'sd57,  -9'sd55,  -9'sd53,  -9'sd51,  -9'sd49,  -9'sd47,  -9'sd45,  -9'sd43,
+	 -9'sd41,  -9'sd39,  -9'sd36,  -9'sd34,  -9'sd32,  -9'sd29,  -9'sd27,  -9'sd24,
+	 -9'sd21,  -9'sd18,  -9'sd16,  -9'sd13,  -9'sd10,   -9'sd7,   -9'sd3,    9'sd0,
+	   9'sd3,    9'sd7,   9'sd11,   9'sd14,   9'sd18,   9'sd22,   9'sd26,   9'sd31,
+	  9'sd35,   9'sd40,   9'sd45,   9'sd50,   9'sd55,   9'sd60,   9'sd66,   9'sd72
+};
+
+wire       [5:0] h_idx = 6'(h_eff + 7'sd16);
+reg signed [8:0] hmid, hpos_off;
+always @(posedge clk_vid) begin
+	hmid     <= $signed(is_m09 ? HMID6[h_idx * 9 +: 9] : HMID8[h_idx * 9 +: 9]);
+	hpos_off <= hpos_usr + hmid - 9'sd1;
+end
 
 wire hs_ref;
 reg  hs_ref_d;
 always @(posedge clk_vid) hs_ref_d <= hs_ref;
 wire hs_ref_rise = hs_ref & ~hs_ref_d;
 
-wire [7:0] rd_period = (is_m09 ? 8'd64 : 8'd48) + {{3{hsize_s[4]}}, hsize_s};
+wire [7:0] rd_period = rd_base + {h_eff[6], h_eff};
 reg  [7:0] rd_acc;
 wire       rd_tick = (rd_acc + 8'd4) >= rd_period;
 
@@ -770,10 +949,10 @@ crt_adjust #(
 	.r_in       (v_r),
 	.g_in       (v_g),
 	.b_in       (v_b),
-	.hs_in      (v_hs),
-	.vs_in      (v_vs),
+	.hs_in      (c_hs),
+	.vs_in      (c_vs),
 	.hb_in      (v_hb | v_vb),
-	.vb_in      (v_vb),
+	.vb_in      (c_vb),
 	.r_out      (str_r),
 	.g_out      (str_g),
 	.b_out      (str_b),
@@ -784,29 +963,24 @@ crt_adjust #(
 	.hs_ref_out (hs_ref)
 );
 
-// Keep the OSD in place when H-Position moves the picture: a DE window that
-// opens with the native active area and closes with the adjusted one.
-// VBlank is taken at the end of each line, so the window runs one line late
-// like the module's output.
-reg  hs_d1, vb_prev, vblank_1l, native_active_d, str_active_d, de_osd;
-wire line_tick     = ce_vid & v_hs & ~hs_d1;
+// The DE window for the OSD and HDMI while CRT Adjust is on: from whichever
+// of the native and the adjusted active areas starts first to whichever ends
+// last, so it holds the whole picture when H-Position or H-Size moves it
+// either way, and the OSD moves at most half as far. VBlank is taken at the
+// end of each line, so the native area runs one line late like the module's
+// output.
+reg  hs_d1, vb_prev, vblank_1l, de_osd;
+wire line_tick     = ce_vid & c_hs & ~hs_d1;
 always @(posedge clk_vid) begin
 	if (ce_vid) begin
-		hs_d1   <= v_hs;
+		hs_d1   <= c_hs;
 		vb_prev <= v_vb;
 	end
 	if (line_tick) vblank_1l <= vb_prev;
 end
 wire native_active = ~(v_hb | vblank_1l);
-always @(posedge clk_vid) if (ce_vid) native_active_d <= native_active;
-wire native_rise   = ce_vid & native_active & ~native_active_d;
 wire str_active    = ~str_hb;
-always @(posedge clk_vid) if (rd_ce) str_active_d <= str_active;
-wire str_fall      = rd_ce & str_active_d & ~str_active;
-always @(posedge clk_vid) begin
-	if      (native_rise) de_osd <= 1'b1;
-	else if (str_fall)    de_osd <= 1'b0;
-end
+always @(posedge clk_vid) de_osd <= native_active | str_active;
 
 assign CLK_VIDEO = clk_vid;
 assign CE_PIXEL  = crt_on ? rd_ce  : av_ce;
@@ -822,9 +996,15 @@ wire [1:0] ar = status[122:121];
 // Bowling games are vertical (MAME ROT270): screen_rotate turns the picture
 // 90 degrees anticlockwise into the DDRAM frame buffer for a horizontal
 // screen. Orientation "Vertical" leaves it as the board makes it, for a
-// rotated monitor. Ninja Clowns is never rotated; a 6809 game is when its
-// board byte says it is vertical.
-wire no_rotate = ~is_vert | status[14];
+// rotated monitor; "Vertical Flip" turns it 180 degrees through it8_flip180
+// (on every output), for a monitor rotated the other way. Ninja Clowns is
+// never rotated; a 6809 game is when its board byte says it is vertical.
+wire no_rotate = ~is_vert | (status[18:17] != 2'd0);
+
+wire        sr_we, sr_rd;
+wire  [7:0] sr_burstcnt, sr_be;
+wire [28:0] sr_addr;
+wire [63:0] sr_din;
 
 screen_rotate screen_rotate
 (
@@ -848,15 +1028,24 @@ screen_rotate screen_rotate
 	.FB_STRIDE      (FB_STRIDE),
 	.FB_VBL         (FB_VBL),
 	.FB_LL          (FB_LL),
-	.DDRAM_CLK      (DDRAM_CLK),
+	.DDRAM_CLK      (),
 	.DDRAM_BUSY     (DDRAM_BUSY),
-	.DDRAM_BURSTCNT (DDRAM_BURSTCNT),
-	.DDRAM_ADDR     (DDRAM_ADDR),
-	.DDRAM_DIN      (DDRAM_DIN),
-	.DDRAM_BE       (DDRAM_BE),
-	.DDRAM_WE       (DDRAM_WE),
-	.DDRAM_RD       (DDRAM_RD)
+	.DDRAM_BURSTCNT (sr_burstcnt),
+	.DDRAM_ADDR     (sr_addr),
+	.DDRAM_DIN      (sr_din),
+	.DDRAM_BE       (sr_be),
+	.DDRAM_WE       (sr_we),
+	.DDRAM_RD       (sr_rd)
 );
+
+// One DDRAM port, both users on clk_vid.
+assign DDRAM_CLK      = clk_vid;
+assign DDRAM_BURSTCNT = flip_own ? fb_burstcnt : sr_burstcnt;
+assign DDRAM_ADDR     = flip_own ? fb_addr     : sr_addr;
+assign DDRAM_DIN      = flip_own ? fb_din      : sr_din;
+assign DDRAM_BE       = flip_own ? fb_be       : sr_be;
+assign DDRAM_WE       = flip_own ? fb_we       : sr_we;
+assign DDRAM_RD       = flip_own ? fb_rd       : sr_rd;
 
 assign FB_FORCE_BLANK = 1'b0;
 
