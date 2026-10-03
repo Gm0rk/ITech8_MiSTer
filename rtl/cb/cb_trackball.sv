@@ -6,15 +6,20 @@
 //  reset at 6800), so the counters must not move more than 7 between two
 //  reads or the difference wraps into the wrong direction. Mouse movement is
 //  therefore collected and paid out at most one count per 0.6 ms per axis
-//  (at most 7 per read); a big flick plays out over a few frames instead of
-//  being lost. Joystick directions step the counters at a fixed rate.
+//  (at most 7 per read), which is the fastest movement the game can see.
+//  At most one frame's worth (28 counts, 17 ms) is kept waiting: anything
+//  beyond is dropped, so the ball stops within a frame of the mouse instead
+//  of playing out a backlog for up to 0.6 s, while a mouse that reports only
+//  every 8 ms (125 Hz) still keeps the counters moving at full rate (D-030).
+//  Joystick directions step the counters at a fixed rate.
 //
 //  Directions as MAME (capbowl.cpp): Y is reversed, so moving the mouse or
 //  stick up counts Y up; right counts X up.
 //
 //  per_frame is for Strata Bowling, which reads 8-bit counts once a frame
 //  (its NMI handler) and clears them: up to about 100 counts per frame are
-//  paid out (one per 0.17 ms), and the stick steps every 0.5 ms.
+//  paid out (one per 0.17 ms), with at most a frame's worth (100) waiting,
+//  and the stick steps every 0.5 ms.
 //
 //  speed: 0 normal (2 mouse counts per step), 1 fast (1), 2 slow (4).
 //
@@ -56,8 +61,13 @@ wire signed [11:0] mdx = {{3{ps2_mouse[4]}}, ps2_mouse[4], ps2_mouse[15:8]};
 wire signed [11:0] mdy = {{3{ps2_mouse[5]}}, ps2_mouse[5], ps2_mouse[23:16]};
 wire signed [11:0] dv  = $signed({8'd0, div});
 
-function signed [11:0] clamp(input signed [12:0] v);
-	clamp = (v > 13'sd1023) ? 12'sd1023 : (v < -13'sd1023) ? -12'sd1023 : v[11:0];
+// Most mouse counts kept waiting: a frame's worth of steps (28, or 100 with
+// per_frame) of div counts each.
+wire        [12:0] lim_u = {9'd0, div} * (per_frame ? 13'd100 : 13'd28);
+wire signed [12:0] lim   = lim_u;
+
+function signed [11:0] clamp(input signed [12:0] v, input signed [12:0] l);
+	clamp = (v > l) ? l[11:0] : (v < -l) ? -l[11:0] : v[11:0];
 endfunction
 
 always @(posedge clk) begin
@@ -73,8 +83,8 @@ always @(posedge clk) begin
 		jcnt <= (jcnt >= joy_period - 18'd1) ? 18'd0 : jcnt + 18'd1;
 
 		if (ps2_mouse[24] != tog_d) begin
-			acc_x <= clamp(acc_x + mdx);
-			acc_y <= clamp(acc_y + mdy);
+			acc_x <= clamp(acc_x + mdx, lim);
+			acc_y <= clamp(acc_y + mdy, lim);
 		end
 		else if (pace == 16'd0) begin
 			if (acc_x >= dv)       begin x <= x + 8'd1; acc_x <= acc_x - dv; end
