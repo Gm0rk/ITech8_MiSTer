@@ -2,7 +2,9 @@
 #
 # MiSTer project: Incredible Technologies 8-bit hardware (Ninja Clowns)
 # Debug revision: the production build plus the Debug OSD page and the
-# diagnostic overlay. Keep every other line identical to Arcade-ITech8.qsf.
+# diagnostic overlay. Keep every other line identical to Arcade-ITech8.qsf,
+# except the release script (POST_FLOW_SCRIPT_FILE), which is production
+# only: the debug core stays in output_files/.
 #
 # WARNING WARNING WARNING:
 # Do not add files to project in Quartus IDE! It will mess this file!
