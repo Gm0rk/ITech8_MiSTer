@@ -22,6 +22,27 @@
 //    8000-FFFF    R   program ROM, fixed (its last 32 KB: prog64 for a
 //                     64 KB program)
 //
+//  map_gtg2 selects the 1992 board of Golden Par Golf (MAME gtg2_map), the
+//  same devices at other addresses:
+//
+//    0100        RW   R: input port 40, W: NMI acknowledge
+//    0120        RW   R: input port 60, W: display page
+//    0140-015F   RW   R (0140): input port 80, W: RAMDAC
+//    0160         W   graphics ROM bank
+//    0180-019F   RW   blitter (as 01C0 above)
+//    01C0         W   sound command (it8_top rewires its bits)
+//    01E0         W   TMS34061 colour latch
+//
+//  map_lo selects MAME's common_lo_map (Golden Tee Golf II joystick, v1.0):
+//  the TMS34061 at 0000-0FFF and the I/O registers of the table above at
+//  1100-11FF, everything else in place. Bit 12 of the address is turned
+//  over for the TMS34061 and I/O decodes only.
+//
+//  tb_horiz gives the trackball the horizontal games' axes (MAME gtgt:
+//  register 12 is X, right positive; 13 is Y, up positive); without it the
+//  vertical games' (stratab: 12 is Y and 13 X, counting down for up and
+//  right).
+//
 //  Interrupts: NMI at the start of vertical blank (held for two E cycles,
 //  about MAME's 1 us), IRQ from the TMS34061's vertical interrupt, FIRQ
 //  from the blitter.
@@ -41,6 +62,9 @@ module it8_main09
 	input             hold,           // freeze the CPU (NVRAM being saved)
 	input             bank_xor,       // MAME init_invbank: bank bit inverted
 	input             prog64,         // 64 KB program: fixed area at 0x8000
+	input             map_gtg2,       // Golden Par Golf's I/O layout (above)
+	input             map_lo,         // TMS34061 at 0000, I/O at 1100 (above)
+	input             tb_horiz,       // trackball axes of a horizontal game
 
 	// Input ports, as the board presents them
 	input       [7:0] in40,
@@ -155,13 +179,21 @@ assign wdata    = cpu_dout;
 assign tms_offs = addr[11:0];
 assign tms_we   = !rnw;
 
-wire sel_snd   = (addr == 16'h0120);
-wire sel_in40  = (addr == 16'h0140);
-wire sel_in60  = (addr == 16'h0160);
-wire sel_in80  = (addr == 16'h0180);
-wire sel_blt   = (addr[15:5] == 11'b0000_0001_110);  // 01C0-01DF
-wire sel_dac   = (addr[15:5] == 11'b0000_0001_111);  // 01E0-01FF
-wire sel_tms   = (addr[15:12] == 4'h1);
+// Reads of the input ports and writes of the board registers, by layout.
+// a_io is the address as the hi layout sees it (map_lo: bit 12 turned over).
+wire [15:0] a_io = {addr[15:13], addr[12] ^ map_lo, addr[11:0]};
+wire sel_in40  = (a_io == (map_gtg2 ? 16'h0100 : 16'h0140));
+wire sel_in60  = (a_io == (map_gtg2 ? 16'h0120 : 16'h0160));
+wire sel_in80  = (a_io == (map_gtg2 ? 16'h0140 : 16'h0180));
+wire sel_snd   = (a_io == (map_gtg2 ? 16'h01C0 : 16'h0120));
+wire sel_grom  = (a_io == (map_gtg2 ? 16'h0160 : 16'h0140));
+wire sel_page  = (a_io == (map_gtg2 ? 16'h0120 : 16'h0160));
+wire sel_latch = (a_io == (map_gtg2 ? 16'h01E0 : 16'h0180));
+wire sel_blt   = map_gtg2 ? (a_io[15:5] == 11'b0000_0001_100)   // 0180-019F
+                          : (a_io[15:5] == 11'b0000_0001_110);  // 01C0-01DF
+wire sel_dac   = map_gtg2 ? (a_io[15:5] == 11'b0000_0001_010)   // 0140-015F
+                          : (a_io[15:5] == 11'b0000_0001_111);  // 01E0-01FF
+wire sel_tms   = (a_io[15:12] == 4'h1);
 wire sel_nv    = (addr[15:13] == 3'b001);
 wire sel_bank  = (addr[15:14] == 2'b01);
 wire sel_fixed = addr[15];
@@ -178,11 +210,14 @@ assign nv_written = nv_cpu_we;
 
 // ---------------------------------------------------------------------------
 // Trackball: the counters read as the count since player 1's were last
-// cleared (a write to register 12). MAME: analog C is the trackball's Y,
-// analog D its X reversed, both counting down for up / right.
+// cleared (a write to register 12). MAME stratab: analog C is the
+// trackball's Y, analog D its X reversed, both counting down for up /
+// right; gtgt (tb_horiz): C is X and D is Y reversed, counting up for
+// right / up.
 
 reg  [7:0] ref_x, ref_y;
-assign an = {8'h00, 8'h00, ref_x - track_x, ref_y - track_y};
+assign an = tb_horiz ? {8'h00, 8'h00, track_y - ref_y, track_x - ref_x}
+                     : {8'h00, 8'h00, ref_x - track_x, ref_y - track_y};
 
 // ---------------------------------------------------------------------------
 // Bus
@@ -244,10 +279,10 @@ always @(posedge clk) begin
 				end
 			end
 			else begin
-				if (sel_snd)  snd_we    <= 1'b1;
-				if (sel_in40) grom_bank <= cpu_dout;
-				if (sel_in60) page      <= cpu_dout;
-				if (sel_in80) latch_we  <= 1'b1;
+				if (sel_snd)   snd_we    <= 1'b1;
+				if (sel_grom)  grom_bank <= cpu_dout;
+				if (sel_page)  page      <= cpu_dout;
+				if (sel_latch) latch_we  <= 1'b1;
 				if (sel_blt) begin
 					blt_idx <= addr[4:1];
 					blt_we  <= 1'b1;
