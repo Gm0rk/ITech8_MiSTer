@@ -91,7 +91,7 @@ localparam CONF_STR = {
 	"P1,CRT Adjust;",
 	"P1-;",
 	"P1O[101],CRT Adjust,Off,On;",
-	"H1P1O[102],CRT Auto-Fill,Off,On;",
+	"H1P1O[102],CRT Auto-Width,Off,On;",
 	"H1P1O[100:96],CRT H-Size,", CRT_S5, ";",
 	"H1P1O[85:79],CRT H-Position,", CRT_HP, ";",
 	"H1P1O[78:74],CRT V-Shift,", CRT_S5, ";",
@@ -129,15 +129,24 @@ wire         video_rotated;
 // Board, from the MRA (ioctl index 1). Bits 1:0: 0 Ninja Clowns, 1 Capcom
 // / Coors Light Bowling, 2 Bowl-O-Rama, 3 an itech8 6809 board (Strata
 // Bowling style). Bits 7:2 describe a 6809 game: 7 vertical (ROT270),
-// 6 trackball, 4 program bank bit inverted, 3 64 KB program; the rest are
-// 0. Stays 0 when the MRA sends no index 1.
+// 6 trackball, 5 Golden Par Golf's 1992 board (its I/O layout, YM3812 sound
+// board, joystick and swing button), 4 program bank bit inverted, 3 64 KB
+// program, 2 joystick and swing button (Golden Tee Golf). Stays 0 when the
+// MRA sends no index 1. An optional second byte carries more 6809 layout
+// bits: bit 0 MAME's common_lo_map (TMS34061 at 0000, I/O at 1100; Golden
+// Tee Golf II joystick). It is cleared with every first byte, so an MRA
+// that sends one byte gets 0.
 reg    [7:0] board_byte = 8'd0;
+reg    [7:0] board_byte2 = 8'd0;
 wire   [1:0] board_sel = board_byte[1:0];
 wire         is_cb  = (board_sel == 2'd1) || (board_sel == 2'd2);
 wire         is_br  = (board_sel == 2'd2);
 wire         is_m09 = (board_sel == 2'd3);
 wire         is_vert = is_cb | (is_m09 & board_byte[7]);
 wire         has_tb  = is_cb | (is_m09 & board_byte[6]);
+wire         is_gtg2 = is_m09 & board_byte[5];
+wire         one_btn = is_m09 & ~board_byte[6] & (board_byte[2] | board_byte[5]);   // swing only
+wire         map_lo  = is_m09 & board_byte2[0];
 wire         flip180 = is_vert & (status[18:17] == 2'd2);   // OSD Orientation "Vertical Flip"
 
 // Declared here because hps_io and the loader use them before the board.
@@ -192,8 +201,14 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 );
 
 always @(posedge clk_sys)
-	if (ioctl_download && ioctl_wr && ioctl_index[5:0] == 6'd1 && ioctl_addr == 27'd0)
-		board_byte <= ioctl_dout;
+	if (ioctl_download && ioctl_wr && ioctl_index[5:0] == 6'd1) begin
+		if (ioctl_addr == 27'd0) begin
+			board_byte  <= ioctl_dout;
+			board_byte2 <= 8'd0;
+		end
+		else if (ioctl_addr == 27'd1)
+			board_byte2 <= ioctl_dout;
+	end
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
@@ -388,10 +403,16 @@ end
 // buttons in the order the MRA names them. Ninja Clowns: punch, kick, throw,
 // start, coin, service (bits 4-9). The trackball games have no third button,
 // so their MRAs name five: hook left, hook right, start, coin, service (bits
-// 4-8), and MiSTer asks for nothing it does not use (D-033). j0 and j1 put
-// both in the Ninja Clowns layout, throw reading 0.
-wire [15:0] j0 = has_tb ? {joystick_0[15:10], joystick_0[8:6], 1'b0, joystick_0[5:0]} : joystick_0[15:0];
-wire [15:0] j1 = has_tb ? {joystick_1[15:10], joystick_1[8:6], 1'b0, joystick_1[5:0]} : joystick_1[15:0];
+// 4-8), and MiSTer asks for nothing it does not use (D-033). The golf
+// games with a stick have one button: swing, start, coin, service (bits
+// 4-7). j0 and j1 put them all in the Ninja Clowns layout, the missing
+// buttons reading 0.
+function [15:0] jlayout(input [31:0] j, input two, input one);
+	jlayout = two ? {j[15:10], j[8:6], 1'b0, j[5:0]} :
+	          one ? {j[15:10], j[7:5], 2'b00, j[4:0]} : j[15:0];
+endfunction
+wire [15:0] j0 = jlayout(joystick_0, has_tb, one_btn);
+wire [15:0] j1 = jlayout(joystick_1, has_tb, one_btn);
 
 wire [7:0] p1 = {j0[4], j0[5], j0[0], j0[1], j0[2], j0[3], j0[7], j0[6]};
 wire [7:0] p2 = {j1[4], j1[5], j1[0], j1[1], j1[2], j1[3], j1[7], j1[6]};
@@ -433,9 +454,16 @@ it8_top board
 	.cpu09         (is_m09),
 	.bank_xor      (board_byte[4]),
 	.prog64        (board_byte[3]),
+	.joy09         (board_byte[2]),
+	.gtg2          (is_gtg2),
+	.tb09          (has_tb),
+	.map_lo        (map_lo),
+	.tb_horiz      (~board_byte[7]),
 	.grom_size     (is_m09 ? grom_bytes : 24'h180000),
-	.track_x       (track_x),
-	.track_y       (track_y),
+	// A game without a trackball reads 0 there, as MAME (read_safe(0)):
+	// the stick, which also drives cb_trackball, must not show up in it.
+	.track_x       (has_tb ? track_x : 8'd0),
+	.track_y       (has_tb ? track_y : 8'd0),
 	.cpu_phi1      (cpu_phi1),
 	.cpu_phi2      (cpu_phi2),
 	.pix_ce        (pix_ce),
@@ -615,9 +643,14 @@ end
 
 // BLD: compile date (YYMMDD from build_id.v) then the build number.
 localparam [47:0] BLD_DATE = `BUILD_DATE;
-localparam  [3:0] BN_H     = (`IT8_BUILD / 100) % 10;
-localparam  [3:0] BN_T     = (`IT8_BUILD / 10) % 10;
-localparam  [3:0] BN_O     = `IT8_BUILD % 10;
+// The digits are worked out as integers and cut to four bits, so the lint
+// width check does not depend on the build number.
+localparam integer BN_HI   = (`IT8_BUILD / 100) % 10;
+localparam integer BN_TI   = (`IT8_BUILD / 10) % 10;
+localparam integer BN_OI   = `IT8_BUILD % 10;
+localparam  [3:0] BN_H     = BN_HI[3:0];
+localparam  [3:0] BN_T     = BN_TI[3:0];
+localparam  [3:0] BN_O     = BN_OI[3:0];
 localparam [35:0] BLD_BCD  = {BLD_DATE[43:40], BLD_DATE[35:32], BLD_DATE[27:24], BLD_DATE[19:16],
                               BLD_DATE[11:8], BLD_DATE[3:0], BN_H, BN_T, BN_O};
 
@@ -836,15 +869,17 @@ it8_sync_center sync_center
 wire signed [8:0] hpos_usr = (hpos_d <= 7'd48) ? $signed({2'b00, hpos_d})
                                                : $signed({2'b00, hpos_d}) - 9'sd97;
 
-// Auto-Fill (D-037): the H-Size that makes the picture 50.5 us wide, about
-// 96 % of a broadcast line (52.66 us), so on a screen with ordinary overscan
-// it reaches the edges with only a few dots hidden. The picture is pic_dots
+// Auto-Width (D-037; OSD "CRT Auto-Fill" until build 018): the H-Size that
+// makes the picture 48.75 us wide, about 93 % of a broadcast line
+// (52.66 us, SMPTE's safe action area), so on a screen with ordinary
+// overscan it reaches the edges without widening the games far beyond the
+// shape their height allows. The picture is pic_dots
 // wide and each of its dots lasts (base + H-Size) / 384 us (base 48 at
 // 8 MHz, 64 at 6 MHz), so the read period that fills is
-// 50.5 x 384 / pic_dots = 19392 / pic_dots, rounded: a restoring division,
+// 48.75 x 384 / pic_dots = 18720 / pic_dots, rounded: a restoring division,
 // one quotient bit a clock, run over and over. The OSD's H-Size then trims
-// from there. Capcom Bowling and Ninja Clowns come out at +6, Strata Bowling
-// at +12.
+// from there. Capcom Bowling and Ninja Clowns come out at +4, Strata Bowling
+// and the golf games at +9 (build 015's 50.5 us gave +6 and +12).
 wire [10:0] pic_dots;
 wire  [7:0] rd_base = is_m09 ? 8'd64 : 8'd48;
 
@@ -859,7 +894,7 @@ wire [14:0] dv_qn  = {dv_q[13:0], dv_bit};
 
 always @(posedge clk_vid) begin
 	if (dv_n == 4'd0) begin
-		dv_num <= 15'd19392 + {5'd0, pic_dots[10:1]};
+		dv_num <= 15'd18720 + {5'd0, pic_dots[10:1]};
 		dv_den <= pic_dots;
 		dv_rem <= 11'd0;
 		dv_q   <= 15'd0;
@@ -875,7 +910,7 @@ always @(posedge clk_vid) begin
 	end
 end
 
-// The H-Size in use: Auto-Fill's, if on, plus the OSD's, kept to -16..+31.
+// The H-Size in use: Auto-Width's, if on, plus the OSD's, kept to -16..+31.
 wire signed [8:0] h_fill = (autofill && fill_per != 8'd0)
                          ? $signed({1'b0, fill_per}) - $signed({1'b0, rd_base}) : 9'sd0;
 wire signed [8:0] h_sum  = h_fill + {{4{hsize_s[4]}}, hsize_s};
