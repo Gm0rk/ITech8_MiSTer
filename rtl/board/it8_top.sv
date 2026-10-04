@@ -26,7 +26,14 @@
 //  (8 KB of it) and the sound board (in its YM2203 mode). Input ports as
 //  MAME's stratab: port 40 service, cabinet and the sound board's feedback
 //  bit; port 60 hooks, starts and coins; trackball on blitter registers
-//  12-15.
+//  12-15. Golden Tee Golf uses the same board: its trackball sets the same
+//  ports (MAME gtgt, tb_horiz for its axes), its joystick sets (joy09, MAME
+//  gtg) the stick and the swing button on port 60 bits 0-4, both players'
+//  together. gtg2 is Golden Par Golf's 1992 board (MAME gtg2): it8_main09's
+//  other I/O layout, the sound board in its YM3812 mode (as Ninja Clowns'),
+//  the sound command's bits rewired, and its own ports (MAME gpgolf; with
+//  a trackball, tb09, MAME gtg2: Golden Tee Golf II v2.2). map_lo is MAME's
+//  common_lo_map (Golden Tee Golf II joystick, v1.0).
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -53,6 +60,11 @@ module it8_top
 	input             cpu09,          // 6809 board (see above)
 	input             bank_xor,       // 6809: program bank bit inverted
 	input             prog64,         // 6809: 64 KB program, fixed area is its upper half
+	input             joy09,          // 6809: joystick and swing button (Golden Tee Golf)
+	input             gtg2,           // 6809: Golden Par Golf's board (above)
+	input             tb09,           // 6809: the game has a trackball
+	input             map_lo,         // 6809: MAME common_lo_map (it8_main09)
+	input             tb_horiz,       // 6809: trackball axes of a horizontal game
 	input      [23:0] grom_size,      // graphics ROM region in bytes
 
 	// Controls, active high
@@ -501,10 +513,30 @@ it8_video video
 // 6809 main CPU (cpu09)
 
 
-// Strata Bowling's input ports (MAME INPUT_PORTS stratab), active low
-// except the sound board's feedback bit.
-wire  [7:0] in40_09 = {~(service | test), 3'b111, 1'b1, 2'b11, special};
-wire  [7:0] in60_09 = ~{coin1, coin2, p1[1], p2[1], p1[7], p1[6], p2[7], p2[6]};
+// Input ports, active low except the sound board's feedback bit. MAME
+// stratab and gtgt: port 40 service, cabinet (Upright), feedback; port 60
+// coins, starts, both players' hooks (face buttons). gtg: port 60's low
+// five bits are the stick and swing button, player 1's and 2's together.
+// gpgolf: port 40 coins, service, cabinet (Upright); port 60 start, stick,
+// swing. gtg2 (the same board with a trackball): port 40 as gpgolf; port 60
+// player 1's start and face buttons, port 80 player 2's.
+wire  [7:0] in40_hi = {~(service | test), 3'b111, 1'b1, 2'b11, special};
+wire  [7:0] in40_g2 = {2'b11, 2'b11, ~coin2, ~coin1, ~(service | test), 1'b1};
+wire  [7:0] in60_tb = ~{coin1, coin2, p1[1], p2[1], p1[7], p1[6], p2[7], p2[6]};
+wire  [7:0] in60_js = ~{coin1, coin2, p1[1], p1[7] | p2[7], p1[4] | p2[4],
+                        p1[5] | p2[5], p1[3] | p2[3], p1[2] | p2[2]};
+wire  [7:0] in60_g2 = ~{p1[1], p1[2], p1[3], p1[4], p1[5], p1[7], 2'b00};
+wire  [7:0] in60_gt = ~{p1[1], 4'b0000, p1[7], p1[6], 1'b0};
+wire  [7:0] in80_gt = ~{p2[1], 4'b0000, p2[7], p2[6], 1'b0};
+wire  [7:0] in40_09 = gtg2 ? in40_g2 : in40_hi;
+wire  [7:0] in60_09 = gtg2 ? (tb09 ? in60_gt : in60_g2) : joy09 ? in60_js : in60_tb;
+wire  [7:0] in80_09 = (gtg2 & tb09) ? in80_gt : 8'hFF;
+
+// Golden Par Golf's board wires the sound command's bits in another order
+// (MAME gtg2_sound_data_w).
+wire  [7:0] snd09 = gtg2 ? {m9_wdata[6], m9_wdata[1], m9_wdata[4], m9_wdata[3],
+                            m9_wdata[2], m9_wdata[5], m9_wdata[0], m9_wdata[7]}
+                         : m9_wdata;
 
 it8_main09 main09
 (
@@ -513,9 +545,12 @@ it8_main09 main09
 	.hold         (hold),
 	.bank_xor     (bank_xor),
 	.prog64       (prog64),
+	.map_gtg2     (gtg2),
+	.map_lo       (map_lo),
+	.tb_horiz     (tb_horiz),
 	.in40         (in40_09),
 	.in60         (in60_09),
-	.in80         (8'hFF),
+	.in80         (in80_09),
 	.track_x      (track_x),
 	.track_y      (track_y),
 	.rom_req      (m9_rom_req),
@@ -567,9 +602,9 @@ it8_sound sound
 	.fall_q       (snd_fall_q),
 	.ym_cen       (ym_cen),
 	.oki_cen      (oki_cen),
-	.ym2203       (cpu09),
+	.ym2203       (cpu09 & ~gtg2),
 	.cmd_we       (cpu09 ? m9_snd_we : snd_we),
-	.cmd          (cpu09 ? m9_wdata  : dev_wdata),
+	.cmd          (cpu09 ? snd09     : dev_wdata),
 	.rom_we       (snd_rom_we),
 	.rom_addr     (snd_rom_addr),
 	.rom_din      (snd_rom_din),
