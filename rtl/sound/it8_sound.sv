@@ -22,6 +22,11 @@
 //  YM2203. Its port B bit 0 is read back by the main CPU (special). Mix as
 //  MAME: FM 0.75, each SSG channel 0.07, OKI 0.75.
 //
+//  pia_brd selects the YM3812 sound board of Hot Shots Tennis style (MAME
+//  sound3812_map): the YM3812 board above with a 6821 PIA at 5000-5003 in
+//  place of the VIA, FIRQ from the YM3812 only, and the PIA's port B bit 0
+//  as the feedback bit.
+//
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
@@ -34,6 +39,7 @@ module it8_sound
 	input                    ym_cen,        // 4 MHz
 	input                    oki_cen,       // 1 MHz
 	input                    ym2203,        // 6809 board sound map (see above)
+	input                    pia_brd,       // YM3812 board with a PIA (see above)
 
 	input                    cmd_we,        // main CPU write to the command latch
 	input              [7:0] cmd,
@@ -85,7 +91,7 @@ mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 	.BS       (),
 	.BA       (),
 	.nIRQ     (~cmd_pend),
-	.nFIRQ    (ym2203 ? ym3_irq_n : ~(via_irq | ~ym_irq_n)),
+	.nFIRQ    (ym2203 ? ym3_irq_n : pia_brd ? ym_irq_n : ~(via_irq | ~ym_irq_n)),
 	.nNMI     (1'b1),
 	.AVMA     (),
 	.BUSY     (),
@@ -103,7 +109,8 @@ wire sel_ym    = !ym2203 && (addr[15:1] == 15'h1000);   // 2000-2001
 wire sel_ym3   =  ym2203 && (addr[15:2] == 14'h0800);   // 2000-2003
 wire sel_ram   = (addr[15:11] == 5'b00110);             // 3000-37FF
 wire sel_oki   = (addr == 16'h4000);
-wire sel_via   = !ym2203 && (addr[15:4] == 12'h500);
+wire sel_via   = !ym2203 && !pia_brd && (addr[15:4] == 12'h500);
+wire sel_pia   =  pia_brd && (addr[15:2] == 14'h1400);  // 5000-5003
 wire sel_rom   = addr[15];
 
 // Accesses complete at the falling edge of E.
@@ -178,6 +185,25 @@ it8_via6522 via
 );
 
 // ---------------------------------------------------------------------------
+// PIA (pia_brd)
+
+wire [7:0] pia_dout, pia_pb;
+
+it8_pia6821 pia
+(
+	.clk    (clk),
+	.reset  (reset),
+	.we     (wr & sel_pia),
+	.rs     (addr[1:0]),
+	.din    (cpu_dout),
+	.dout   (pia_dout),
+	.pa_in  (8'hFF),
+	.pb_in  (8'hFF),
+	.pa_out (),
+	.pb_out (pia_pb)
+);
+
+// ---------------------------------------------------------------------------
 // YM3812
 
 wire  [7:0] ym_dout;
@@ -241,7 +267,7 @@ always @(posedge clk) begin
 	else if (ym3_iob_oe) special_q <= ym3_iob[0];
 end
 
-assign special = ym2203 ? special_q : via_pb[0];
+assign special = ym2203 ? special_q : pia_brd ? pia_pb[0] : via_pb[0];
 
 // ---------------------------------------------------------------------------
 // OKI M6295 and its sample ROM in SDRAM (one-word cache).
@@ -302,6 +328,7 @@ always @(*) begin
 	else if (sel_ym3)   cpu_din = ym3_dout;
 	else if (sel_oki)   cpu_din = oki_dout;
 	else if (sel_via)   cpu_din = via_dout;
+	else if (sel_pia)   cpu_din = pia_dout;
 	else                cpu_din = 8'h00;
 end
 
