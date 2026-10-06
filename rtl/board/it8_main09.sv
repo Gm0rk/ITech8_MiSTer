@@ -8,7 +8,8 @@
 //    0100         W   (unused)
 //    0120         W   sound command
 //    0140        RW   R: input port 40, W: graphics ROM bank
-//    0160        RW   R: input port 60, W: display page
+//    0160        RW   R: input port 60, W: display page (C0 at reset, as
+//                     MAME)
 //    0180        RW   R: input port 80, W: TMS34061 colour latch
 //    01A0         W   NMI acknowledge (no effect, as MAME)
 //    01C0-01DF   RW   blitter (register = offset / 2); register 7 bit 5 is
@@ -43,6 +44,13 @@
 //  vertical games' (stratab: 12 is Y and 13 X, counting down for up and
 //  right).
 //
+//  dial_mode puts a spinner on register 13 (MAME analog D) instead, the
+//  trackball's X counter, counting up to the right; the other registers
+//  read 0. 1: the counter itself (Wheel Of Fortune, which works out the
+//  movement itself; MAME: no PORT_RESET), 2: the count since the last write
+//  to register 12, as the trackball (Peggle's trackball set reads 13 and
+//  then clears it there, once a frame; MAME: PORT_RESET).
+//
 //  Interrupts: NMI at the start of vertical blank (held for two E cycles,
 //  about MAME's 1 us), IRQ from the TMS34061's vertical interrupt, FIRQ
 //  from the blitter.
@@ -65,6 +73,7 @@ module it8_main09
 	input             map_gtg2,       // Golden Par Golf's I/O layout (above)
 	input             map_lo,         // TMS34061 at 0000, I/O at 1100 (above)
 	input             tb_horiz,       // trackball axes of a horizontal game
+	input       [1:0] dial_mode,      // spinner on register 13 (above)
 
 	// Input ports, as the board presents them
 	input       [7:0] in40,
@@ -216,7 +225,9 @@ assign nv_written = nv_cpu_we;
 // right / up.
 
 reg  [7:0] ref_x, ref_y;
-assign an = tb_horiz ? {8'h00, 8'h00, track_y - ref_y, track_x - ref_x}
+wire [7:0] dial = dial_mode[1] ? track_x - ref_x : track_x;
+assign an = (dial_mode != 2'd0) ? {8'h00, 8'h00, dial, 8'h00} :
+            tb_horiz ? {8'h00, 8'h00, track_y - ref_y, track_x - ref_x}
                      : {8'h00, 8'h00, ref_x - track_x, ref_y - track_y};
 
 // ---------------------------------------------------------------------------
@@ -247,7 +258,7 @@ always @(posedge clk) begin
 		tms_wait  <= 1'b0;
 		bank      <= 1'b0;
 		grom_bank <= 8'h00;
-		page      <= 8'h00;
+		page      <= 8'hC0;           // MAME video_start
 		ref_x     <= track_x;
 		ref_y     <= track_y;
 		cpu_din   <= 8'h00;
