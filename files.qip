@@ -33,6 +33,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/it8_loader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_ce.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_nvram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_main09.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_ports09.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/board/it8_top.sv
 
 # --- Video: TMS34061, VRAM, blitter, RAMDAC, Vertical Flip, centred sync ---
@@ -46,6 +47,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/it8_sync_center.sv
 
 # --- Sound board -----------------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_via6522.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_pia6821.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_sound.sv
 
 # --- Capcom Bowling board --------------------------------------------------
