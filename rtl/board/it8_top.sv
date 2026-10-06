@@ -35,6 +35,13 @@
 //  a trackball, tb09, MAME gtg2: Golden Tee Golf II v2.2). map_lo is MAME's
 //  common_lo_map (Golden Tee Golf II joystick, v1.0).
 //
+//  From build 020 the 6809 board also takes a display mode (disp_mode: 0
+//  two layers, 1 Ninja Clowns' 2 page large at 8 MHz with the page bit
+//  inverted, MAME hstennis; 2 one 8-bit page, MAME pokrdice), a sound board
+//  (snd_mode: 0 as above, 1 the YM3812 board with a PIA, MAME
+//  sound3812_map) and an input layout (in_layout, it8_ports09.sv: 0 the
+//  ports above, others a game's own from the raw joysticks j0r-j2r).
+//
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
@@ -65,6 +72,9 @@ module it8_top
 	input             tb09,           // 6809: the game has a trackball
 	input             map_lo,         // 6809: MAME common_lo_map (it8_main09)
 	input             tb_horiz,       // 6809: trackball axes of a horizontal game
+	input       [1:0] disp_mode,      // 6809: display layout (above)
+	input       [1:0] snd_mode,       // 6809: sound board (above)
+	input       [3:0] in_layout,      // 6809: input ports (it8_ports09)
 	input      [23:0] grom_size,      // graphics ROM region in bytes
 
 	// Controls, active high
@@ -76,6 +86,9 @@ module it8_top
 	input             test,
 	input       [7:0] track_x,        // trackball counters (cb_trackball)
 	input       [7:0] track_y,
+	input      [15:0] j0r,            // 6809, in_layout != 0: MiSTer joysticks
+	input      [15:0] j1r,            //   as they come (it8_ports09)
+	input      [15:0] j2r,
 
 	// SDRAM: 68000 program ROM
 	output            rom_req,
@@ -458,15 +471,23 @@ wire [15:0] m9_pc, m9_frames, m9_nmi, m9_firq, m9_waits;
 // ---------------------------------------------------------------------------
 // Video
 
+// 6809 display modes: 1 (2 page large) runs at Ninja Clowns' 8 MHz, the
+// others one byte per 6 MHz dot. MAME's 6809 2 page large shows the page
+// whose bit 7 of the page register is clear (Ninja Clowns writes it
+// inverted, so it8_video takes bit 7 set as page 1).
+wire m9_dots6 = cpu09 & ~disp_mode[0];
+
 it8_video video
 (
 	.clk           (clk),
 	.reset         (reset),
-	.pix_ce        (cpu09 ? vid6_ce : pix_ce),
-	.chr_ce        (cpu09 ? vid6_ce : chr_ce),
-	.pix_left      (cpu09 | pix_left),
-	.two_layer     (cpu09),
-	.page_sel      (cpu09 ? m9_page[7] : page_sel),
+	.pix_ce        (m9_dots6 ? vid6_ce : pix_ce),
+	.chr_ce        (m9_dots6 ? vid6_ce : chr_ce),
+	.pix_left      (m9_dots6 | pix_left),
+	.two_layer     (cpu09 & (disp_mode == 2'd0)),
+	.page8         (cpu09 & (disp_mode == 2'd2)),
+	.col_eb        (cpu09),
+	.page_sel      (cpu09 ? m9_page[7] ^ (disp_mode == 2'd1) : page_sel),
 	.grom_bank     (cpu09 ? m9_grom_bank : grom_bank),
 	.grom_size     (grom_size),
 	.an            (cpu09 ? m9_an : 32'd0),
@@ -513,24 +534,33 @@ it8_video video
 // 6809 main CPU (cpu09)
 
 
-// Input ports, active low except the sound board's feedback bit. MAME
-// stratab and gtgt: port 40 service, cabinet (Upright), feedback; port 60
-// coins, starts, both players' hooks (face buttons). gtg: port 60's low
-// five bits are the stick and swing button, player 1's and 2's together.
-// gpgolf: port 40 coins, service, cabinet (Upright); port 60 start, stick,
-// swing. gtg2 (the same board with a trackball): port 40 as gpgolf; port 60
-// player 1's start and face buttons, port 80 player 2's.
-wire  [7:0] in40_hi = {~(service | test), 3'b111, 1'b1, 2'b11, special};
-wire  [7:0] in40_g2 = {2'b11, 2'b11, ~coin2, ~coin1, ~(service | test), 1'b1};
-wire  [7:0] in60_tb = ~{coin1, coin2, p1[1], p2[1], p1[7], p1[6], p2[7], p2[6]};
-wire  [7:0] in60_js = ~{coin1, coin2, p1[1], p1[7] | p2[7], p1[4] | p2[4],
-                        p1[5] | p2[5], p1[3] | p2[3], p1[2] | p2[2]};
-wire  [7:0] in60_g2 = ~{p1[1], p1[2], p1[3], p1[4], p1[5], p1[7], 2'b00};
-wire  [7:0] in60_gt = ~{p1[1], 4'b0000, p1[7], p1[6], 1'b0};
-wire  [7:0] in80_gt = ~{p2[1], 4'b0000, p2[7], p2[6], 1'b0};
-wire  [7:0] in40_09 = gtg2 ? in40_g2 : in40_hi;
-wire  [7:0] in60_09 = gtg2 ? (tb09 ? in60_gt : in60_g2) : joy09 ? in60_js : in60_tb;
-wire  [7:0] in80_09 = (gtg2 & tb09) ? in80_gt : 8'hFF;
+// Input ports (it8_ports09.sv).
+wire  [7:0] in40_09, in60_09, in80_09;
+
+it8_ports09 ports09
+(
+	.layout  (in_layout),
+	.joy09   (joy09),
+	.gtg2    (gtg2),
+	.tb09    (tb09),
+	.p1      (p1),
+	.p2      (p2),
+	.coin1   (coin1),
+	.coin2   (coin2),
+	.service (service),
+	.j0      (j0r),
+	.j1      (j1r),
+	.j2      (j2r),
+	.test    (test),
+	.special (special),
+	.in40    (in40_09),
+	.in60    (in60_09),
+	.in80    (in80_09)
+);
+
+// A dial on blitter register 13 (it8_main09): Wheel Of Fortune's reads the
+// counter, Peggle's (trackball set) the count since register 12 was written.
+wire  [1:0] dial_mode = (in_layout == 4'd1) ? 2'd1 : (in_layout == 4'd7) ? 2'd2 : 2'd0;
 
 // Golden Par Golf's board wires the sound command's bits in another order
 // (MAME gtg2_sound_data_w).
@@ -548,6 +578,7 @@ it8_main09 main09
 	.map_gtg2     (gtg2),
 	.map_lo       (map_lo),
 	.tb_horiz     (tb_horiz),
+	.dial_mode    (dial_mode),
 	.in40         (in40_09),
 	.in60         (in60_09),
 	.in80         (in80_09),
@@ -602,7 +633,8 @@ it8_sound sound
 	.fall_q       (snd_fall_q),
 	.ym_cen       (ym_cen),
 	.oki_cen      (oki_cen),
-	.ym2203       (cpu09 & ~gtg2),
+	.ym2203       (cpu09 & ~gtg2 & (snd_mode == 2'd0)),
+	.pia_brd      (cpu09 & (snd_mode == 2'd1)),
 	.cmd_we       (cpu09 ? m9_snd_we : snd_we),
 	.cmd          (cpu09 ? snd09     : dev_wdata),
 	.rom_we       (snd_rom_we),
