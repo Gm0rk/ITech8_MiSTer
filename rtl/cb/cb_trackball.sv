@@ -23,6 +23,12 @@
 //
 //  speed: 0 normal (2 mouse counts per step), 1 fast (1), 2 slow (4).
 //
+//  side multiplies the mouse's sideways (X) counts by 1 to 4 before they
+//  are paid out (OSD Trackball Sideways, D-040), for the bowling games that
+//  halve the sideways axis themselves. The pacing above still applies, so
+//  the counters never move faster than the game can read them; only slower
+//  movement gains. The stick is not affected.
+//
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
@@ -36,6 +42,7 @@ module cb_trackball
 	input            left,
 	input            right,
 	input      [1:0] speed,
+	input      [1:0] side,            // sideways multiplier - 1 (0: x1 .. 3: x4)
 	input            per_frame,       // Strata Bowling pacing (see above)
 	output reg [7:0] x,
 	output reg [7:0] y
@@ -57,7 +64,10 @@ reg signed [11:0] acc_x, acc_y;
 reg [15:0] pace;
 reg [17:0] jcnt;
 
-wire signed [11:0] mdx = {{3{ps2_mouse[4]}}, ps2_mouse[4], ps2_mouse[15:8]};
+wire signed [11:0] mdx1 = {{3{ps2_mouse[4]}}, ps2_mouse[4], ps2_mouse[15:8]};
+wire signed [11:0] mdx  = (side == 2'd0) ? mdx1 :
+                          (side == 2'd1) ? (mdx1 <<< 1) :
+                          (side == 2'd2) ? (mdx1 + (mdx1 <<< 1)) : (mdx1 <<< 2);
 wire signed [11:0] mdy = {{3{ps2_mouse[5]}}, ps2_mouse[5], ps2_mouse[23:16]};
 wire signed [11:0] dv  = $signed({8'd0, div});
 
@@ -83,8 +93,8 @@ always @(posedge clk) begin
 		jcnt <= (jcnt >= joy_period - 18'd1) ? 18'd0 : jcnt + 18'd1;
 
 		if (ps2_mouse[24] != tog_d) begin
-			acc_x <= clamp(acc_x + mdx, lim);
-			acc_y <= clamp(acc_y + mdy, lim);
+			acc_x <= clamp({acc_x[11], acc_x} + {mdx[11], mdx}, lim);
+			acc_y <= clamp({acc_y[11], acc_y} + {mdy[11], mdy}, lim);
 		end
 		else if (pace == 16'd0) begin
 			if (acc_x >= dv)       begin x <= x + 8'd1; acc_x <= acc_x - dv; end
