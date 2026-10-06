@@ -99,6 +99,7 @@ localparam CONF_STR = {
 	"H2O[8:7],Audio,FM + PCM,FM only,PCM only;",
 	"H3O[18:17],Orientation,Horizontal,Vertical,Vertical Flip;",
 	"H4O[16:15],Trackball Speed,Normal,Fast,Slow;",
+	"H5O[20:19],Trackball Sideways,1x,2x,3x,4x;",
 	// The board's service switch: on opens the game's service menu.
 	"O[9],Service Mode,Off,On;",
 	CONF_DBG,
@@ -122,7 +123,7 @@ wire  [15:0] ioctl_index;
 wire         ioctl_wait;
 wire   [7:0] ioctl_din;
 
-wire  [31:0] joystick_0, joystick_1;
+wire  [31:0] joystick_0, joystick_1, joystick_2;
 wire  [24:0] ps2_mouse;
 wire         video_rotated;
 
@@ -134,19 +135,33 @@ wire         video_rotated;
 // program, 2 joystick and swing button (Golden Tee Golf). Stays 0 when the
 // MRA sends no index 1. An optional second byte carries more 6809 layout
 // bits: bit 0 MAME's common_lo_map (TMS34061 at 0000, I/O at 1100; Golden
-// Tee Golf II joystick). It is cleared with every first byte, so an MRA
-// that sends one byte gets 0.
+// Tee Golf II joystick); bits 2-1 the display (0 two layers, 1 2 page large
+// at 8 MHz, 2 one 8-bit page); bits 4-3 the sound board (0 as bit 5 of the
+// first byte says, 1 the YM3812 board with a PIA); bit 6 the NVRAM starts
+// as 00, not FF; bit 7 the game is vertical the other way (MAME ROT90). A third byte is the input layout
+// (it8_ports09.sv; 0 the ports of the games before build 020). Both are
+// cleared with every first byte, so an MRA that sends one byte gets 0.
 reg    [7:0] board_byte = 8'd0;
 reg    [7:0] board_byte2 = 8'd0;
+reg    [7:0] board_byte3 = 8'd0;
 wire   [1:0] board_sel = board_byte[1:0];
 wire         is_cb  = (board_sel == 2'd1) || (board_sel == 2'd2);
 wire         is_br  = (board_sel == 2'd2);
 wire         is_m09 = (board_sel == 2'd3);
-wire         is_vert = is_cb | (is_m09 & board_byte[7]);
+wire         rot90   = is_m09 & board_byte2[7];
+wire         is_vert = is_cb | (is_m09 & board_byte[7]) | rot90;
 wire         has_tb  = is_cb | (is_m09 & board_byte[6]);
 wire         is_gtg2 = is_m09 & board_byte[5];
 wire         one_btn = is_m09 & ~board_byte[6] & (board_byte[2] | board_byte[5]);   // swing only
 wire         map_lo  = is_m09 & board_byte2[0];
+wire   [1:0] disp_mode = is_m09 ? board_byte2[2:1] : 2'd0;
+wire   [1:0] snd_mode  = is_m09 ? board_byte2[4:3] : 2'd0;
+wire   [3:0] in_layout = is_m09 ? board_byte3[3:0] : 4'd0;
+wire         has_dial  = (in_layout == 4'd1) || (in_layout == 4'd7);   // it8_main09
+wire         nv_fill00 = is_br | (is_m09 & board_byte2[6]);           // NVRAM starts 00
+// 6 MHz dots: the 6809 games but those in 2 page large (8 MHz, as Ninja
+// Clowns and the bowling board).
+wire         dot6      = is_m09 & ~disp_mode[0];
 wire         flip180 = is_vert & (status[18:17] == 2'd2);   // OSD Orientation "Vertical Flip"
 
 // Declared here because hps_io and the loader use them before the board.
@@ -181,7 +196,7 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 
 	.buttons            (buttons),
 	.status             (status),
-	.status_menumask    ({11'd0, ~has_tb, ~is_vert, is_cb, ~status[101], 1'b0}),
+	.status_menumask    ({10'd0, ~has_tb, ~(has_tb | has_dial), ~is_vert, is_cb, ~status[101], 1'b0}),
 
 	.ioctl_download     (ioctl_download),
 	.ioctl_upload       (ioctl_upload),
@@ -197,6 +212,7 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 
 	.joystick_0         (joystick_0),
 	.joystick_1         (joystick_1),
+	.joystick_2         (joystick_2),
 	.ps2_mouse          (ps2_mouse)
 );
 
@@ -205,9 +221,12 @@ always @(posedge clk_sys)
 		if (ioctl_addr == 27'd0) begin
 			board_byte  <= ioctl_dout;
 			board_byte2 <= 8'd0;
+			board_byte3 <= 8'd0;
 		end
 		else if (ioctl_addr == 27'd1)
 			board_byte2 <= ioctl_dout;
+		else if (ioctl_addr == 27'd2)
+			board_byte3 <= ioctl_dout;
 	end
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -370,8 +389,10 @@ it8_loader loader
 // Downloads wait while the SDRAM is still initialising.
 assign ioctl_wait = ld_wait | ~sd_ready;
 
-// NVRAM, MiSTer side: filled at ROM load (FF; Bowl-O-Rama 00, as MAME),
-// then the saved file (index 4); for Ninja Clowns a file of all zeros is
+// NVRAM, MiSTer side: filled at ROM load (FF; Bowl-O-Rama 00, as MAME; Hot
+// Shots Tennis 00, board byte 2 bit 6: from all FF it hangs at the first
+// game start, in MAME too, D-041), then the saved file (index 4); for
+// Ninja Clowns a file of all zeros is
 // replaced by the FF fill again (it8_loader). Any CPU write marks it for
 // saving; MiSTer saves it when the OSD opens, and the CPUs are held
 // meanwhile so the image is consistent.
@@ -386,7 +407,7 @@ always @(posedge clk_sys) begin
 end
 
 wire [13:0] nv_addr = nv_fill ? nv_fill_addr : ioctl_addr[13:0];
-wire  [7:0] nv_din  = nv_fill ? (is_br ? 8'h00 : 8'hFF) : ioctl_dout;
+wire  [7:0] nv_din  = nv_fill ? (nv_fill00 ? 8'h00 : 8'hFF) : ioctl_dout;
 wire        nv_we   = nv_fill | (ioctl_download & ioctl_wr & nv_io & ~|ioctl_addr[26:14]);
 assign ioctl_din    = nv_dout;
 
@@ -406,7 +427,8 @@ end
 // 4-8), and MiSTer asks for nothing it does not use (D-033). The golf
 // games with a stick have one button: swing, start, coin, service (bits
 // 4-7). j0 and j1 put them all in the Ninja Clowns layout, the missing
-// buttons reading 0.
+// buttons reading 0. The games from build 020 on have their own layouts
+// (board byte 3, it8_ports09.sv), which take the joysticks as they come.
 function [15:0] jlayout(input [31:0] j, input two, input one);
 	jlayout = two ? {j[15:10], j[8:6], 1'b0, j[5:0]} :
 	          one ? {j[15:10], j[7:5], 2'b00, j[4:0]} : j[15:0];
@@ -417,7 +439,7 @@ wire [15:0] j1 = jlayout(joystick_1, has_tb, one_btn);
 wire [7:0] p1 = {j0[4], j0[5], j0[0], j0[1], j0[2], j0[3], j0[7], j0[6]};
 wire [7:0] p2 = {j1[4], j1[5], j1[0], j1[1], j1[2], j1[3], j1[7], j1[6]};
 
-// Trackball (bowling games): the mouse, or the stick.
+// Trackball (bowling and golf games) or dial: the mouse, or the stick.
 wire [7:0] track_x, track_y;
 
 cb_trackball trackball
@@ -430,6 +452,7 @@ cb_trackball trackball
 	.left      (j0[1]),
 	.right     (j0[0]),
 	.speed     (status[16:15]),
+	.side      (status[20:19]),
 	.per_frame (is_m09),
 	.x         (track_x),
 	.y         (track_y)
@@ -459,11 +482,17 @@ it8_top board
 	.tb09          (has_tb),
 	.map_lo        (map_lo),
 	.tb_horiz      (~board_byte[7]),
+	.disp_mode     (disp_mode),
+	.snd_mode      (snd_mode),
+	.in_layout     (in_layout),
 	.grom_size     (is_m09 ? grom_bytes : 24'h180000),
 	// A game without a trackball reads 0 there, as MAME (read_safe(0)):
 	// the stick, which also drives cb_trackball, must not show up in it.
-	.track_x       (has_tb ? track_x : 8'd0),
+	.track_x       ((has_tb | has_dial) ? track_x : 8'd0),
 	.track_y       (has_tb ? track_y : 8'd0),
+	.j0r           (joystick_0[15:0]),
+	.j1r           (joystick_1[15:0]),
+	.j2r           (joystick_2[15:0]),
 	.cpu_phi1      (cpu_phi1),
 	.cpu_phi2      (cpu_phi2),
 	.pix_ce        (pix_ce),
@@ -799,7 +828,9 @@ wire [7:0] av_r, av_g, av_b;
 wire       av_hs, av_vs, av_de, av_ce;
 wire [1:0] av_sl;
 
-arcade_video #(.WIDTH(362), .DW(24)) arcade_video
+// WIDTH: the widest picture, Hot Shots Tennis's 416 dots (the scandoubler's
+// line buffer).
+arcade_video #(.WIDTH(416), .DW(24)) arcade_video
 (
 	.clk_video          (clk_vid),
 	.ce_pix             (ce_vid),
@@ -826,7 +857,8 @@ arcade_video #(.WIDTH(362), .DW(24)) arcade_video
 // CRT Adjust (rmonic79), core-side. Active only without the scandoubler:
 // its read rate assumes the native 15 kHz pixel clock. 12 clk_vid clocks per
 // pixel = 48 quarter cycles (8 MHz dots); each H-Size step is 1/48 (about
-// 2%). The 6809 boards' 6 MHz dots are 16 clocks, 64 quarter cycles.
+// 2%). The 6809 board's 6 MHz dots (dot6: every 6809 game but the 2 page
+// large ones, which run at 8 MHz) are 16 clocks, 64 quarter cycles.
 
 wire scandoubled = (status[5:3] != 3'd0) | forced_scandoubler;
 
@@ -853,7 +885,7 @@ it8_sync_center sync_center
 (
 	.clk     (clk_vid),
 	.ce      (ce_vid),
-	.dot6    (is_m09),
+	.dot6    (dot6),
 	.hs_in   (v_hs),
 	.vs_in   (v_vs),
 	.hb_in   (v_hb),
@@ -881,7 +913,7 @@ wire signed [8:0] hpos_usr = (hpos_d <= 7'd48) ? $signed({2'b00, hpos_d})
 // from there. Capcom Bowling and Ninja Clowns come out at +4, Strata Bowling
 // and the golf games at +9 (build 015's 50.5 us gave +6 and +12).
 wire [10:0] pic_dots;
-wire  [7:0] rd_base = is_m09 ? 8'd64 : 8'd48;
+wire  [7:0] rd_base = dot6 ? 8'd64 : 8'd48;
 
 reg   [3:0] dv_n = 4'd0;              // 0: load, 1-15: quotient bits 14..0
 reg  [14:0] dv_num = 15'd0, dv_q = 15'd0;
@@ -945,7 +977,7 @@ localparam [431:0] HMID6 = {   // H-Size +31 .. -16
 wire       [5:0] h_idx = 6'(h_eff + 7'sd16);
 reg signed [8:0] hmid, hpos_off;
 always @(posedge clk_vid) begin
-	hmid     <= $signed(is_m09 ? HMID6[h_idx * 9 +: 9] : HMID8[h_idx * 9 +: 9]);
+	hmid     <= $signed(dot6 ? HMID6[h_idx * 9 +: 9] : HMID8[h_idx * 9 +: 9]);
 	hpos_off <= hpos_usr + hmid - 9'sd1;
 end
 
@@ -1030,10 +1062,11 @@ wire [1:0] ar = status[122:121];
 
 // Bowling games are vertical (MAME ROT270): screen_rotate turns the picture
 // 90 degrees anticlockwise into the DDRAM frame buffer for a horizontal
-// screen. Orientation "Vertical" leaves it as the board makes it, for a
-// rotated monitor; "Vertical Flip" turns it 180 degrees through it8_flip180
-// (on every output), for a monitor rotated the other way. Ninja Clowns is
-// never rotated; a 6809 game is when its board byte says it is vertical.
+// screen; the ROT90 games (Hot Shots Tennis, Peggle, Poker Dice) clockwise.
+// Orientation "Vertical" leaves it as the board makes it, for a rotated
+// monitor; "Vertical Flip" turns it 180 degrees through it8_flip180 (on
+// every output), for a monitor rotated the other way. Ninja Clowns is never
+// rotated; a 6809 game is when its board bytes say it is vertical.
 wire no_rotate = ~is_vert | (status[18:17] != 2'd0);
 
 wire        sr_we, sr_rd;
@@ -1051,7 +1084,7 @@ screen_rotate screen_rotate
 	.VGA_HS         (av_hs),
 	.VGA_VS         (av_vs),
 	.VGA_DE         (av_de),
-	.rotate_ccw     (1'b1),
+	.rotate_ccw     (~rot90),
 	.no_rotate      (no_rotate),
 	.flip           (1'b0),
 	.video_rotated  (video_rotated),
