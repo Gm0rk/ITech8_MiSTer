@@ -18,6 +18,14 @@
 //    instead wherever it is not 0. 6 MHz dots, one per character count;
 //    column 0 is shown at the first visible count (END BLANK), as MAME.
 //
+//  * page8, Poker Dice (MAME screen_update_2page): one byte per pixel,
+//    256 x 256, the page chosen by page_sel; timed as two_layer (6 MHz,
+//    column 0 at END BLANK).
+//
+//  The 6809 games of Hot Shots Tennis style use the Ninja Clowns layout
+//  (2 page large) with the page bit the other way round (it8_top inverts
+//  it), but, as every 6809 board, show column 0 at END BLANK (col_eb).
+//
 //  At the start of every visible line the whole VRAM row is copied into a
 //  line buffer, as the real VRAM transfers the row into its serial port; in
 //  two_layer mode the page 0 row follows into a second buffer (nibbles).
@@ -35,6 +43,8 @@ module it8_video
 
 	// Board registers
 	input             two_layer,      // Strata Bowling display (see above)
+	input             page8,          // Poker Dice display (see above)
+	input             col_eb,         // 2 page large: column 0 at END BLANK
 	input             page_sel,       // displayed page (bit 7 of 0x100180 write)
 	input       [7:0] grom_bank,
 	input      [23:0] grom_size,      // graphics ROM region in bytes
@@ -93,6 +103,7 @@ module it8_video
 // ---------------------------------------------------------------------------
 // TMS34061
 
+wire byte_dots = two_layer | page8;   // one byte per dot, 6 MHz
 wire [15:0] xyaddress, xyoffset, dispstart;
 wire  [7:0] latch;
 wire  [9:0] hcnt, vcnt, h_end_sync, h_end_blank;
@@ -112,7 +123,7 @@ it8_tms34061 tms
 	.clk          (clk),
 	.reset        (reset),
 	.chr_ce       (chr_ce),
-	.raster09     (two_layer),
+	.raster09     (byte_dots),
 	.op_start     (tms_start),
 	.op_offs      (tms_offs),
 	.op_row       (8'hFF),
@@ -271,7 +282,7 @@ end
 // ---------------------------------------------------------------------------
 // Line buffer and display pipeline
 
-wire  [7:0] disp_col = hcnt[7:0] - (two_layer ? h_end_blank[7:0] : h_end_sync[7:0]) + col_off;
+wire  [7:0] disp_col = hcnt[7:0] - ((byte_dots | col_eb) ? h_end_blank[7:0] : h_end_sync[7:0]) + col_off;
 reg   [2:0] lane;
 wire [127:0] lb_rdata;
 wire  [31:0] tb_rdata;
@@ -313,6 +324,7 @@ wire  [3:0] tb_nib  = tb_rdata[4*lane +: 4];
 reg   [7:0] s1_pix;
 reg         s1_hs, s1_vs, s1_hb, s1_vb, s1_on;
 wire  [7:0] pix_val = two_layer ? ((tb_nib != 4'h0) ? {4'h0, tb_nib} : lb_cell[15:8]) :
+                      page8     ? lb_cell[15:8] :
                       pix_left  ? {lb_cell[7:4], lb_cell[15:12]} : {lb_cell[3:0], lb_cell[11:8]};
 
 always @(posedge clk) begin
