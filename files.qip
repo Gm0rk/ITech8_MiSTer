@@ -12,7 +12,8 @@
 #                  Vertical Flip frame buffer
 #      sound/      the external YM3812 sound board: 6809 glue, 6522 VIA
 #      mem/        FPGA side only: block RAM templates, SDRAM, ROM loader
-#      debug/      the diagnostic overlay (debug revision)
+#      debug/      the diagnostic overlay: Board and Controls pages (debug
+#                  revision)
 #      cb/         the earlier Capcom Bowling board (also Coors Light
 #                  Bowling and Bowl-O-Rama): main board, video, sound board,
 #                  trackball
@@ -58,6 +59,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_top.sv
 
 # --- Diagnostic overlay ----------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_text.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_page.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_ctrl.sv
 
 # --- CRT Adjust (rmonic79), core-side --------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/crt/crt_adjust.sv
