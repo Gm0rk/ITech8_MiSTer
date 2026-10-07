@@ -20,6 +20,8 @@ Shots Tennis**, **Arlington Horse Racing**, **Peggle** and
 
 ## Games
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/itech8_Gameplay.png" width="800">
+
 The table lists every game MAME runs on Incredible Technologies' 8-bit
 hardware: the bowling games in its `capbowl` driver, the rest in its
 `itech8` driver. This core implements three of the boards: the 68000
