@@ -74,7 +74,8 @@ localparam CRT_HP = "0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+1
 localparam CONF_DBG = {
 	"P2,Debug;",
 	"P2-;",
-	"P2O[64],Diagnostic overlay,Off,On;",
+	"P2O[65:64],Diagnostic overlay,Off,Board,Trackball,Analog;",
+	"P2T[66],Clear control counters;",
 	"-;"
 };
 `else
@@ -125,6 +126,11 @@ wire   [7:0] ioctl_din;
 
 wire  [31:0] joystick_0, joystick_1, joystick_2;
 wire  [24:0] ps2_mouse;
+// For the debug build's Controls page only (it8_dbg_ctrl.sv); no game uses
+// them.
+wire  [15:0] ana_l0, ana_r0, ana_l1, ana_r1;
+wire   [8:0] spinner_0;
+wire   [7:0] paddle_0;
 wire         video_rotated;
 
 // Board, from the MRA (ioctl index 1). Bits 1:0: 0 Ninja Clowns, 1 Capcom
@@ -213,6 +219,12 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 	.joystick_0         (joystick_0),
 	.joystick_1         (joystick_1),
 	.joystick_2         (joystick_2),
+	.joystick_l_analog_0 (ana_l0),
+	.joystick_r_analog_0 (ana_r0),
+	.joystick_l_analog_1 (ana_l1),
+	.joystick_r_analog_1 (ana_r1),
+	.paddle_0           (paddle_0),
+	.spinner_0          (spinner_0),
 	.ps2_mouse          (ps2_mouse)
 );
 
@@ -441,6 +453,7 @@ wire [7:0] p2 = {j1[4], j1[5], j1[0], j1[1], j1[2], j1[3], j1[7], j1[6]};
 
 // Trackball (bowling and golf games) or dial: the mouse, or the stick.
 wire [7:0] track_x, track_y;
+wire [15:0] track_drop_x, track_drop_y;      // the Controls page's DROP
 
 cb_trackball trackball
 (
@@ -455,7 +468,9 @@ cb_trackball trackball
 	.side      (status[20:19]),
 	.per_frame (is_m09),
 	.x         (track_x),
-	.y         (track_y)
+	.y         (track_y),
+	.drop_x    (track_drop_x),
+	.drop_y    (track_drop_y)
 );
 
 wire        it8_ce_pix, it8_hs, it8_vs, it8_hb, it8_vb;
@@ -699,8 +714,11 @@ always @(posedge clk_sys) begin
 	if (!nv_saving && nvst_save_d) nvst_save <= nvst_save + 16'd1;
 end
 
-wire ov_pix, ov_box;
-wire ov_on = status[64];
+// OSD Diagnostic overlay: Board (this panel), or the Trackball or Analog
+// page (below).
+wire ov_pix, ov_box, cp_pix, cp_box;
+wire ov_on = (status[65:64] == 2'd1);
+wire cp_on = status[65];
 
 it8_dbg_text #(
 	.N_ROWS (16),
@@ -732,8 +750,53 @@ it8_dbg_text #(
 	.in_box   (ov_box)
 );
 
-assign ov_hit = ov_on & ov_pix;
-assign ov_blk = ov_on & ov_box;
+// Trackball and Analog pages (D-042, D-043): what the mouse, spinner,
+// paddle and analog sticks send and what reaches the game's trackball
+// counters. A page is written once a frame from the start of vertical
+// blanking, and turned to read upright with the game: cp_rot is how the
+// viewer sees the raster, turned anticlockwise for MAME ROT270 (as
+// screen_rotate, or a monitor on its side), clockwise for ROT90, and the
+// other way after Vertical Flip, which turns the picture under the overlay.
+// OSD Clear control counters, or a reset, starts the counts again.
+reg        cp_vb_d = 1'b0, cp_clr_d = 1'b0;
+always @(posedge clk_sys) begin
+	if (ce_pix) cp_vb_d <= core_vb;
+	cp_clr_d <= status[66];
+end
+wire       cp_frame = ce_pix & core_vb & ~cp_vb_d;
+wire [1:0] cp_rot   = ~is_vert ? 2'd0 : (~rot90 ^ flip180) ? 2'd1 : 2'd2;
+wire [3:0] tb_div   = (status[16:15] == 2'd1) ? 4'd1 : (status[16:15] == 2'd2) ? 4'd4 : 4'd2;
+
+it8_dbg_ctrl dbg_ctrl
+(
+	.clk       (clk_sys),
+	.clear     (reset | (status[66] & ~cp_clr_d)),
+	.frame     (cp_frame),
+	.ps2_mouse (ps2_mouse),
+	.spinner   (spinner_0),
+	.paddle    (paddle_0),
+	.ana_l0    (ana_l0),
+	.ana_r0    (ana_r0),
+	.ana_l1    (ana_l1),
+	.ana_r1    (ana_r1),
+	.track_x   (track_x),
+	.track_y   (track_y),
+	.drop_x    (track_drop_x),
+	.drop_y    (track_drop_y),
+	.div       (tb_div),
+	.side      ({1'b0, status[20:19]} + 3'd1),
+	.ce        (ce_pix),
+	.de        (~core_hb & ~core_vb),
+	.vis_x     (vis_x),
+	.vis_y     (vis_y),
+	.rot       (cp_rot),
+	.page      (status[64]),
+	.pix       (cp_pix),
+	.in_box    (cp_box)
+);
+
+assign ov_hit = (ov_on & ov_pix) | (cp_on & cp_pix);
+assign ov_blk = (ov_on & ov_box) | (cp_on & cp_box);
 `else
 assign ov_hit = 1'b0;
 assign ov_blk = 1'b0;
