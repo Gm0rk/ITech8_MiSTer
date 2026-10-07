@@ -23,6 +23,10 @@
 //
 //  speed: 0 normal (2 mouse counts per step), 1 fast (1), 2 slow (4).
 //
+//  drop_x / drop_y count the mouse counts the frame's-worth limit dropped
+//  (after the sideways multiplier), wrapping, for the debug build's controls
+//  page (it8_dbg_ctrl.sv); nothing else uses them.
+//
 //  side multiplies the mouse's sideways (X) counts by 1 to 4 before they
 //  are paid out (OSD Trackball Sideways, D-040), for the bowling games that
 //  halve the sideways axis themselves. The pacing above still applies, so
@@ -45,7 +49,9 @@ module cb_trackball
 	input      [1:0] side,            // sideways multiplier - 1 (0: x1 .. 3: x4)
 	input            per_frame,       // Strata Bowling pacing (see above)
 	output reg [7:0] x,
-	output reg [7:0] y
+	output reg [7:0] y,
+	output reg [15:0] drop_x = 16'd0,
+	output reg [15:0] drop_y = 16'd0
 );
 
 localparam [15:0] PACE    = 16'd28800;        // 0.6 ms: one mouse step
@@ -80,6 +86,18 @@ function signed [11:0] clamp(input signed [12:0] v, input signed [12:0] l);
 	clamp = (v > l) ? l[11:0] : (v < -l) ? -l[11:0] : v[11:0];
 endfunction
 
+// What the limit cuts off a new sum.
+function [15:0] excess(input signed [12:0] v, input signed [12:0] l);
+	reg signed [12:0] e;
+	begin
+		e = (v > l) ? v - l : (v < -l) ? -l - v : 13'sd0;
+		excess = {3'd0, e};
+	end
+endfunction
+
+wire signed [12:0] sum_x = {acc_x[11], acc_x} + {mdx[11], mdx};
+wire signed [12:0] sum_y = {acc_y[11], acc_y} + {mdy[11], mdy};
+
 always @(posedge clk) begin
 	tog_d <= ps2_mouse[24];
 	if (reset) begin
@@ -93,8 +111,10 @@ always @(posedge clk) begin
 		jcnt <= (jcnt >= joy_period - 18'd1) ? 18'd0 : jcnt + 18'd1;
 
 		if (ps2_mouse[24] != tog_d) begin
-			acc_x <= clamp({acc_x[11], acc_x} + {mdx[11], mdx}, lim);
-			acc_y <= clamp({acc_y[11], acc_y} + {mdy[11], mdy}, lim);
+			acc_x  <= clamp(sum_x, lim);
+			acc_y  <= clamp(sum_y, lim);
+			drop_x <= drop_x + excess(sum_x, lim);
+			drop_y <= drop_y + excess(sum_y, lim);
 		end
 		else if (pace == 16'd0) begin
 			if (acc_x >= dv)       begin x <= x + 8'd1; acc_x <= acc_x - dv; end
