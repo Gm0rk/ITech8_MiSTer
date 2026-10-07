@@ -219,6 +219,18 @@ a small trackball that needs several spins to bring the ball to the
 middle; the forward roll is unchanged. It cannot go past the most the board
 can read, about 28 counts a frame on each axis.
 
+**Setting up a trackball, spinner or analog controller:** the debug core
+(`Arcade-ITech8_debug`, started by the MRAs in `mra/debug/`) has OSD Debug
+→ Diagnostic overlay → Trackball and → Analog, small pages over the
+running game (upright on the vertical games too). Trackball shows what
+MiSTer receives from the mouse (where most USB trackballs and spinners
+arrive) and its spinner input, and what reaches the game's trackball:
+counts in the last frame, the most in one frame, the counts in one roll of
+the ball, reports a second, and the counts dropped above what the game
+can read. Analog shows the paddle and the analog sticks of controllers 1
+and 2 with each one's range. Debug → Clear control counters starts them
+again.
+
 **OSD:** aspect ratio, scandoubler effects, scaling, CRT Adjust, Service
 Mode and Reset; the games on the IT blitter boards add the audio mix (FM
 + PCM, FM only, PCM only); the vertical games add Orientation
