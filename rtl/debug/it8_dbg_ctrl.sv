@@ -22,12 +22,14 @@
 //                                second.
 //    GAME       X     Y          The trackball counters the game reads
 //    FRAME                       (cb_trackball, mouse and stick), as
-//    PEAK                        above, in the game's counts. DROP: mouse
+//    PEAK                        above, in the game's counts. DROP: game
 //    ROLL                        counts dropped because more than a
 //    TOTAL                       frame's worth was waiting (after the
 //    DROP                        sideways multiplier). DIV: mouse counts
-//    DIV                         per game count (OSD Trackball Speed);
-//    SIDE                        SIDE: the sideways multiplier.
+//    DIV                         per game count (OSD Trackball Speed; 0
+//    SIDE                        with a trackball gain set); SIDE: the
+//                                sideways multiplier (0 with a sideways
+//                                gain set).
 //
 //  Analog (10 rows):
 //    ANALOG   NOW   MIN   MAX    Paddle 0 to 255, sticks -127 to 127
@@ -35,6 +37,13 @@
 //    P1 LX ... P2 RY             controllers 1 and 2, left and right
 //                                sticks), now and the range since
 //                                cleared.
+//
+//  Calibration (14 rows, shown while OSD Calibrate trackball runs and ten
+//  seconds after, it8_dbg_cal.sv): the game's kind and the prompt, then in
+//  two columns, forward (FWD) and sideways (SIDE): the throw or roll under
+//  way and the three results (mouse counts: forward in the game's window,
+//  sideways the roll's total), the goals (game counts) and the gains found,
+//  in percent of Normal.
 //
 //  clear zeroes the counts and restarts the ranges (OSD Clear control
 //  counters, and every reset).
@@ -48,6 +57,7 @@ module it8_dbg_ctrl #(
 	parameter BOX_Y  = 8
 )(
 	input         clk,
+	input         reset,
 	input         clear,
 	input         frame,          // one clock at the start of vertical blanking
 
@@ -72,6 +82,18 @@ module it8_dbg_ctrl #(
 	input   [7:0] vis_y,
 	input   [1:0] rot,
 	input         page,           // 0 Trackball, 1 Analog
+
+	input         cal_start,      // one clock: OSD Calibrate trackball
+	input   [1:0] cal_kind,       // it8_dbg_cal.sv
+	output        cal_active,     // calibration page up: show the overlay
+	output  [5:0] cal_gain,       // the gain steps found: forward
+	output  [5:0] cal_gain_x,     //   and sideways (0 off)
+	output        cal_wr,         // one clock: write them to the OSD
+	input   [5:0] gain_sel,       // OSD Trackball gain step
+	input   [5:0] gain_x_sel,     // OSD Trackball sideways gain step
+	output [10:0] gain,           // their gains for cb_trackball (0 off)
+	output [10:0] gain_x,
+
 	output        pix,
 	output        in_box
 );
@@ -181,7 +203,50 @@ generate
 endgenerate
 
 // ---------------------------------------------------------------------------
-// The pages: 0 Trackball, 1 Analog; 24 columns, five-character numbers.
+// Trackball calibration (it8_dbg_cal.sv): forward is the mouse's Y,
+// sideways its X.
+
+wire [31:0] c_live, c_live_x, c_r1, c_r2, c_r3, c_s1, c_s2, c_s3;
+wire [31:0] c_goal, c_goal_x, c_gain, c_gain_x;
+wire  [3:0] c_msg_a, c_msg_b;
+
+it8_dbg_cal cal
+(
+	.clk    (clk),
+	.reset  (reset),
+	.start  (cal_start),
+	.frame  (frame),
+	.ev     (m_ev),
+	.dy     (m_dy),
+	.dx     (m_dx),
+	.kind   (cal_kind),
+	.active (cal_active),
+	.msg_a  (c_msg_a),
+	.msg_b  (c_msg_b),
+	.v_live (c_live),
+	.v_live_x (c_live_x),
+	.v_r1   (c_r1),
+	.v_r2   (c_r2),
+	.v_r3   (c_r3),
+	.v_s1   (c_s1),
+	.v_s2   (c_s2),
+	.v_s3   (c_s3),
+	.v_goal (c_goal),
+	.v_goal_x (c_goal_x),
+	.v_gain (c_gain),
+	.v_gain_x (c_gain_x),
+	.gain_n (cal_gain),
+	.gain_x_n (cal_gain_x),
+	.wr     (cal_wr),
+	.sel    (gain_sel),
+	.sel_x  (gain_x_sel),
+	.sel_gain (gain),
+	.sel_gain_x (gain_x)
+);
+
+// ---------------------------------------------------------------------------
+// The pages: 0 Trackball, 1 Analog, 2 Calibration (shown while it runs);
+// 24 columns, five-character numbers.
 
 localparam [1:0] F_NO = 2'd0, F_S = 2'd1, F_U = 2'd2;
 localparam [31:0] Z = 32'd0;
@@ -189,7 +254,7 @@ localparam [31:0] Z = 32'd0;
 localparam N_ROWS = 16;
 localparam FW     = 5;
 
-localparam [8*24*2*N_ROWS-1:0] TEXT = {
+localparam [8*24*3*N_ROWS-1:0] TEXT = {
 	// Trackball page (16 rows)
 	"MOUSE      X     Y  SPIN",
 	"FRAME                   ",
@@ -223,10 +288,41 @@ localparam [8*24*2*N_ROWS-1:0] TEXT = {
 	"                        ",
 	"                        ",
 	"                        ",
+	"                        ",
+	// Calibration page (14 rows)
+	"TRACKBALL CALIBRATION   ",
+	"                        ",
+	"                        ",
+	"                        ",
+	"         FWD  SIDE      ",
+	"LIVE                    ",
+	"TRY 1                   ",
+	"TRY 2                   ",
+	"TRY 3                   ",
+	"GOAL                    ",
+	"GAIN                 PCT",
+	"                        ",
+	"SAVE SETTINGS IN THE OSD",
+	"TO KEEP THE GAINS       ",
+	"                        ",
 	"                        "
 };
 
-localparam [6*2*N_ROWS-1:0] FMT = {
+// The calibration page's changing lines (it8_dbg_cal.sv), line 0 first.
+localparam [8*24*10-1:0] MSGS = {
+	"                        ",
+	"NOT A TRACKBALL GAME    ",
+	"BOWLING  8 FRAMES       ",
+	"BOWL-O-RAMA  4 FRAMES   ",
+	"GOLF  2 FRAMES          ",
+	"THROW AS HARD AS IN PLAY",
+	"SWING AS HARD AS IN PLAY",
+	"TOO SLOW  TRY AGAIN     ",
+	"DONE  GAINS SET         ",
+	"ROLL SIDEWAYS AS IN PLAY"
+};
+
+localparam [6*3*N_ROWS-1:0] FMT = {
 	// Trackball
 	F_NO, F_NO, F_NO,
 	F_S,  F_S,  F_S,
@@ -255,10 +351,23 @@ localparam [6*2*N_ROWS-1:0] FMT = {
 	F_S,  F_S,  F_S,
 	F_S,  F_S,  F_S,
 	F_S,  F_S,  F_S,
-	{6{F_NO, F_NO, F_NO}}
+	{6{F_NO, F_NO, F_NO}},
+	// Calibration
+	F_NO, F_NO, F_NO,
+	F_NO, F_NO, F_NO,
+	F_NO, F_NO, F_NO,
+	F_NO, F_NO, F_NO,
+	F_NO, F_NO, F_NO,
+	F_U,  F_U,  F_NO,
+	F_U,  F_U,  F_NO,
+	F_U,  F_U,  F_NO,
+	F_U,  F_U,  F_NO,
+	F_U,  F_U,  F_NO,
+	F_U,  F_U,  F_NO,
+	{5{F_NO, F_NO, F_NO}}
 };
 
-wire [96*2*N_ROWS-1:0] vals = {
+wire [96*3*N_ROWS-1:0] vals = {
 	// Trackball
 	Z, Z, Z,
 	mx_fr,  my_fr,  sp_fr,
@@ -280,7 +389,20 @@ wire [96*2*N_ROWS-1:0] vals = {
 	Z, Z, Z,
 	{24'd0, paddle}, {24'd0, pd_lo}, {24'd0, pd_hi},
 	sticks,
-	{6{Z, Z, Z}}
+	{6{Z, Z, Z}},
+	// Calibration
+	Z, Z, Z,
+	Z, Z, Z,
+	Z, Z, Z,
+	Z, Z, Z,
+	Z, Z, Z,
+	c_live, c_live_x, Z,
+	c_r1,   c_s1,     Z,
+	c_r2,   c_s2,     Z,
+	c_r3,   c_s3,     Z,
+	c_goal, c_goal_x, Z,
+	c_gain, c_gain_x, Z,
+	{5{Z, Z, Z}}
 };
 
 // The page is written two clocks after the frame pulse, once the frame's
@@ -289,14 +411,19 @@ reg [1:0] frame_d = 2'b00;
 always @(posedge clk) frame_d <= {frame_d[0], frame};
 
 it8_dbg_page #(
-	.N_PAGES (2),
-	.N_ROWS  (N_ROWS),
-	.FW      (FW),
-	.BOX_X   (BOX_X),
-	.BOX_Y   (BOX_Y),
-	.TEXT    (TEXT),
-	.FMT     (FMT),
-	.ROWS    ({5'd16, 5'd10})
+	.N_PAGES   (3),
+	.N_ROWS    (N_ROWS),
+	.FW        (FW),
+	.BOX_X     (BOX_X),
+	.BOX_Y     (BOX_Y),
+	.TEXT      (TEXT),
+	.FMT       (FMT),
+	.ROWS      ({5'd16, 5'd10, 5'd14}),
+	.N_MSG     (10),
+	.MSGS      (MSGS),
+	.MSG_PAGE  (2),
+	.MSG_ROW_A (1),
+	.MSG_ROW_B (3)
 ) pages (
 	.clk    (clk),
 	.frame  (frame_d[1]),
@@ -305,7 +432,9 @@ it8_dbg_page #(
 	.vis_x  (vis_x),
 	.vis_y  (vis_y),
 	.rot    (rot),
-	.page   ({1'b0, page}),
+	.page   (cal_active ? 2'd2 : {1'b0, page}),
+	.msg_a  (c_msg_a),
+	.msg_b  (c_msg_b),
 	.vals   (vals),
 	.pix    (pix),
 	.in_box (in_box)
