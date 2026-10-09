@@ -61,6 +61,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_text.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_page.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_cal.sv
 
 # --- CRT Adjust (rmonic79), core-side --------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/crt/crt_adjust.sv
