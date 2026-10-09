@@ -231,7 +231,15 @@ counts in the last frame, the most in one frame, the counts in one roll of
 the ball, reports a second, and the counts dropped above what the game
 can read. Analog shows the paddle and the analog sticks of controllers 1
 and 2 with each one's range. Debug → Clear control counters starts them
-again.
+again. Debug → Calibrate trackball (the bowling games and the golf
+trackball sets) asks for three throws or swings as hard as in play,
+measures them the way the game does, and sets Debug → Trackball gain so
+that a hard throw just reaches the game's top speed or full swing power.
+In the bowling games three sideways rolls follow, and Debug → Trackball
+sideways gain is set so that a roll moves the ball about half the lane.
+It assumes the game's own trackball setting is at factory. The gains
+replace Trackball Speed and Trackball Sideways for the mouse and can also
+be set by hand; Save settings in the OSD keeps them, for that game only.
 
 **OSD:** aspect ratio, scandoubler effects, scaling, CRT Adjust, Service
 Mode and Reset; the games on the IT blitter boards add the audio mix (FM
