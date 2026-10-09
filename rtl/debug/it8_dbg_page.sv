@@ -3,7 +3,7 @@
 //  it8_dbg_page.sv - diagnostic overlay: pages of text and numbers that read
 //  upright however the picture is turned
 //
-//  N_PAGES pages of up to N_ROWS rows; page holds ROWS rows (5 bits a page,
+//  N_PAGES pages of up to N_ROWS rows (at most 32 each); page p holds ROWS rows (5 bits a page,
 //  page 0 first). A row is COLS = 9 + 3 x FW character cells (8 x 8
 //  pixels, the 5 x 7 glyphs of it8_dbg_text.sv plus a minus sign): a line
 //  of fixed text (TEXT, COLS characters a row, page 0 row 0 first, every
@@ -32,6 +32,10 @@
 //  with the game. The turns need the raster's visible width and height,
 //  measured from the previous frame (de).
 //
+//  Two rows of page MSG_PAGE (MSG_ROW_A, MSG_ROW_B) can instead show one of
+//  N_MSG lines of MSGS (COLS characters each, line 0 first), picked by msg_a
+//  and msg_b: the calibration page's changing prompts.
+//
 //  The page sits at (BOX_X, BOX_Y) of the viewer's picture, as tall as its
 //  rows. Output is two clocks behind vis_x / vis_y, as it8_dbg_text's.
 //
@@ -40,13 +44,18 @@
 
 module it8_dbg_page #(
 	parameter N_PAGES = 1,
-	parameter N_ROWS  = 16,                // rows a page, at most (N_PAGES x N_ROWS at most 32)
+	parameter N_ROWS  = 16,                // rows a page, at most (32 at most)
 	parameter FW      = 6,                 // field width, 2 to 6
 	parameter BOX_X   = 8,
 	parameter BOX_Y   = 8,
 	parameter [8*(9+3*FW)*N_PAGES*N_ROWS-1:0] TEXT = {(N_PAGES*N_ROWS){{(9+3*FW){" "}}}},
 	parameter [6*N_PAGES*N_ROWS-1:0]          FMT  = {(N_PAGES*N_ROWS){6'd0}},
-	parameter [5*N_PAGES-1:0]                 ROWS = {N_PAGES{N_ROWS[4:0]}}
+	parameter [5*N_PAGES-1:0]                 ROWS = {N_PAGES{N_ROWS[4:0]}},
+	parameter N_MSG     = 1,
+	parameter [8*(9+3*FW)*N_MSG-1:0]          MSGS = {N_MSG{{(9+3*FW){" "}}}},
+	parameter MSG_PAGE  = 3,               // 3: none
+	parameter MSG_ROW_A = 31,
+	parameter MSG_ROW_B = 31
 )(
 	input                            clk,
 	input                            frame,   // one clock at the start of vertical blanking
@@ -56,6 +65,8 @@ module it8_dbg_page #(
 	input                      [7:0] vis_y,
 	input                      [1:0] rot,     // 0 none, 1 viewer sees it turned anticlockwise, 2 clockwise
 	input                      [1:0] page,
+	input                      [3:0] msg_a,   // line of MSGS on MSG_ROW_A
+	input                      [3:0] msg_b,   // and on MSG_ROW_B
 	input  [96*N_PAGES*N_ROWS-1:0]   vals,
 	output reg                       pix,     // glyph pixel: draw white
 	output reg                       in_box   // inside the panel: draw black
@@ -84,7 +95,10 @@ localparam   [4:0] K0_5    = K0[4:0];
 localparam   [2:0] K0_3    = K0[2:0];
 localparam   [4:0] FSTEP   = FSTEP_I[4:0];
 localparam   [2:0] NPG     = N_PAGES[2:0];
-localparam  [12:0] NCH13   = NCH[12:0];
+// Index widths of the constant buses.
+localparam FMT_W = $clog2(6 * NROWS);
+localparam VAL_W = $clog2(96 * NROWS);
+localparam TPL_W = $clog2(6 * NCH);
 
 localparam [5:0] G_SPACE = 6'd36;
 localparam [5:0] G_MINUS = 6'd37;
@@ -113,6 +127,23 @@ function [6*NCH-1:0] glyphs(input [8*NCH-1:0] t);
 endfunction
 
 localparam [6*NCH-1:0] TPL = glyphs(TEXT);
+
+localparam NMC = N_MSG * COLS;
+
+function [6*NMC-1:0] mglyphs(input [8*NMC-1:0] t);
+	integer i;
+	begin
+		mglyphs = {6*NMC{1'b0}};
+		for (i = 0; i < NMC; i = i + 1)
+			mglyphs[6*i +: 6] = glyph_of(t[8*i +: 8]);
+	end
+endfunction
+
+localparam [6*NMC-1:0] MTPL = mglyphs(MSGS);
+localparam MSG_W    = $clog2(6 * NMC + 1);
+localparam   [1:0] MPG      = MSG_PAGE[1:0];
+localparam   [4:0] MROW_A   = MSG_ROW_A[4:0];
+localparam   [4:0] MROW_B   = MSG_ROW_B[4:0];
 
 // ---------------------------------------------------------------------------
 // Character RAM: 32 rows of 32 cells, {row, column}.
@@ -159,17 +190,27 @@ endfunction
 
 wire [4:0]  pg_rows = rows_of(pg);
 wire [4:0]  last    = pg_rows - 5'd1;
-wire [6:0]  pg_base = {5'd0, pg} * N_ROWS[6:0];
-wire [4:0]  row_all = pg_base[4:0] + f_row;
-wire [4:0]  row_up  = NROWS[4:0] - 5'd1 - row_all;               // row from the bottom of the buses
-wire [1:0]  fld_up  = 2'd2 - f_fld;
-wire [7:0]  fmt_i   = 8'd6 * {3'd0, row_up} + {5'd0, fld_up, 1'b0};
-wire [11:0] val_i   = 12'd96 * {7'd0, row_up} + {5'd0, fld_up, 5'd0};
+// Bus positions, worked out at 32 bits and cut to the bus's index width.
+wire [31:0] row_all = {30'd0, pg} * N_ROWS + {27'd0, f_row};
+wire [31:0] row_up  = NROWS - 1 - row_all;                        // row from the bottom of the buses
+wire [31:0] fld_up  = 32'd2 - {30'd0, f_fld};
+wire [31:0] fmt_i32 = 6 * row_up + 2 * fld_up;
+wire [31:0] val_i32 = 96 * row_up + 32 * fld_up;
+wire [FMT_W-1:0] fmt_i = fmt_i32[FMT_W-1:0];
+wire [VAL_W-1:0] val_i = val_i32[VAL_W-1:0];
 wire [1:0]  fmt_cur = FMT[fmt_i +: 2];
 wire [31:0] val_cur = vals[val_i +: 32];
 wire [31:0] val_neg = 32'd0 - f_val;
-wire [9:0]  tpl_n   = {5'd0, row_all} * COLS[9:0] + {5'd0, f_col};
-wire [12:0] tpl_i   = 13'd6 * (NCH13 - 13'd1 - {3'd0, tpl_n});
+wire [31:0] tpl_i32 = 6 * (NCH - 1 - (row_all * COLS + {27'd0, f_col}));
+wire [TPL_W-1:0] tpl_i = tpl_i32[TPL_W-1:0];
+
+// A message row: the line msg_a or msg_b of MSGS.
+wire       is_msg_a = (MSG_PAGE < 3) && (pg == MPG) && (f_row == MROW_A);
+wire       is_msg_b = (MSG_PAGE < 3) && (pg == MPG) && (f_row == MROW_B);
+wire [3:0] msg_n    = is_msg_a ? msg_a : msg_b;
+wire [31:0] msg_i32 = 6 * (NMC - 1 - ({28'd0, msg_n} * COLS + {27'd0, f_col}));
+wire [MSG_W-1:0] msg_i = msg_i32[MSG_W-1:0];
+wire       msg_ok   = ({28'd0, msg_n} < N_MSG);
 wire [4:0]  fld_col = 5'd7 + {3'd0, f_fld} * FSTEP;             // 7, 8 + FW, 9 + 2 x FW
 
 // One double-dabble step: add 3 to each digit of 5 or more.
@@ -212,7 +253,7 @@ always @(posedge clk) begin
 		S_TEXT: begin
 			wr_en   <= 1'b1;
 			wr_addr <= {f_row, f_col};
-			wr_data <= TPL[tpl_i +: 6];
+			wr_data <= (is_msg_a || is_msg_b) ? (msg_ok ? MTPL[msg_i +: 6] : G_SPACE) : TPL[tpl_i +: 6];
 			if (f_col == COLS[4:0] - 5'd1) begin
 				f_fld <= 2'd0;
 				st    <= S_FIELD;
