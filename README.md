@@ -8,9 +8,9 @@ Coors Light Bowling and Bowl-O-Rama, on IT's earlier bowling board, are
 playable with sound too, and so is **Strata Bowling** (1990), the first
 game on the 6809 blitter board. **Golden Tee Golf**, **Golden Tee Golf II**
 and **Golden Par Golf**, on the same board, are not yet tested on hardware,
-and neither are the newest: **Wheel Of Fortune**, **Poker Dice**, **Hot
-Shots Tennis**, **Arlington Horse Racing**, **Peggle** and
-**Neck-N-Neck**.
+and neither are the newer ones: **Wheel Of Fortune**, **Poker Dice**,
+**Hot Shots Tennis**, **Arlington Horse Racing**, **Peggle**,
+**Neck-N-Neck** and, newest, **Rim Rockin' Basketball**.
 
 > **This core was made with AI.** The RTL and documentation were written in
 > collaboration with an AI assistant (Claude, by Anthropic).
@@ -26,8 +26,8 @@ The table lists every game MAME runs on Incredible Technologies' 8-bit
 hardware: the bowling games in its `capbowl` driver, the rest in its
 `itech8` driver. This core implements three of the boards: the 68000
 board, which only Ninja Clowns uses, the earlier bowling board ¹, and the
-6809 blitter board ², so far for every planned game on it but two: Rim
-Rockin' Basketball and Grudge Match, which come next. Three games are not
+6809 blitter board ², so far for every planned game on it but one: Grudge
+Match, which comes next. Three games are not
 planned ³.
 
 | Game | Year | Main CPU | Status |
@@ -45,7 +45,7 @@ planned ³.
 | **Ninja Clowns** | 1991 | 68000 | **Playable, with sound** |
 | **Peggle** (joystick, trackball) | 1991 | 6809 ² | **Added**, not yet tested on hardware |
 | **Poker Dice** (v1.7) | 1991 | 6809 ² | **Added**, not yet tested on hardware |
-| Rim Rockin' Basketball (v2.2, v2.0, v1.6, v1.5, v1.2) | 1991 | HD6309 | Planned (next) |
+| **Rim Rockin' Basketball** (v2.2, v2.0, v1.6, v1.5, v1.2, v1.2 bootleg) | 1991 | HD6309 ² | **Added**, not yet tested on hardware |
 | Slick Shot (v2.2, v1.7, v1.6) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 | **Strata Bowling** (V3, V1) | 1990 | 6809 ² | **Playable, with sound** |
 | Super Strike Bowling (v1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
@@ -69,6 +69,9 @@ Wheel Of Fortune is Strata Bowling's board with a dial. Hot Shots Tennis,
 Arlington Horse Racing, Peggle and Neck-N-Neck show Ninja Clowns' screen
 layout (two 512 × 256 pages of 4-bit pixels, 8 MHz dots, wider pictures)
 and have a YM3812 sound board with a PIA; Poker Dice shows one 8-bit page.
+Rim Rockin' Basketball has an HD6309 at 3 MHz (run here as a 6809, which
+is all the game uses), Ninja Clowns' screen layout and sound board, and up
+to four players.
 
 ³ Not planned for now: Dyno Bop, Slick Shot and Super Strike Bowling, and
 the Strata Bowling v1 set built on Super Strike Bowling's board (MAME's
@@ -82,7 +85,7 @@ mechanical games.
 Ninja Clowns board    [##########]  10/10 sections working on hardware
 Bowling board         [########--]   8/10 sections confirmed on hardware
 6809 blitter board    [########--]   8/10 sections confirmed on hardware
-Games                 [#########-]  13/15 added, 4 playable on hardware (3 not planned)
+Games                 [#########-]  14/15 added, 4 playable on hardware (3 not planned)
 ```
 
 The Ninja Clowns board's ten sections are the 68000 and memory map, SDRAM
@@ -103,10 +106,10 @@ and their reasons are in `DECISIONS.md`.
 | | Ninja Clowns board | Bowling board | 6809 blitter board (Strata Bowling, golf and the rest) |
 |---|---|---|---|
 | Board | IT 8-bit, 68000 variant: lower board P/N 1029 REV3A and YM3812 sound board P/N 1038 REV2 | IT bowling board (1988); Bowl-O-Rama adds a turbo board | IT 8-bit, 6809 variant, Strata Bowling style (single board); Golden Par Golf and Golden Tee Golf II v2.2: the 1992 board P/N 1047 with the YM3812 sound board P/N 1038 |
-| Main CPU | 68000 @ 12 MHz | 6809 @ 2 MHz | 6809 @ 2 MHz |
-| Sound | 6809 @ 2 MHz, YM3812, OKI M6295, 6522 VIA | 6809 @ 2 MHz, YM2203, DAC | 6809 @ 2 MHz, YM2203, OKI M6295 (Golden Par Golf, Golden Tee Golf II v2.2: Ninja Clowns' sound board; Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck: YM3812, OKI M6295, 6821 PIA) |
-| Video | TMS34061 and ITV4400 blitter, two 512 × 256 VRAM pages, MS176 RAMDAC (256 colours) | TMS34061, 64 KB VRAM, 16 colours per line from 4096 | TMS34061 and ITV4400 blitter, 6-bit RAMDAC (256 colours); a 256 × 256 8-bit background and a 4-bit foreground, or Ninja Clowns' two pages (Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck), or one 8-bit page (Poker Dice) |
-| Display | 362 × 240, 15.686 kHz, 59.64 Hz | 360 × 245 (Bowl-O-Rama 240), vertical, 15.81 kHz, about 60 Hz | 256 × 240, 15.71 kHz, 59.7 Hz; 416 × 240 (Hot Shots Tennis, Peggle) or 392 × 240 (Arlington, Neck-N-Neck), 15.69 kHz, 59.65 Hz; vertical (Strata Bowling; Hot Shots Tennis, Peggle and Poker Dice turned the other way) or horizontal |
+| Main CPU | 68000 @ 12 MHz | 6809 @ 2 MHz | 6809 @ 2 MHz (Rim Rockin' Basketball: HD6309 @ 3 MHz) |
+| Sound | 6809 @ 2 MHz, YM3812, OKI M6295, 6522 VIA | 6809 @ 2 MHz, YM2203, DAC | 6809 @ 2 MHz, YM2203, OKI M6295 (Golden Par Golf, Golden Tee Golf II v2.2, Rim Rockin' Basketball: Ninja Clowns' sound board; Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck: YM3812, OKI M6295, 6821 PIA) |
+| Video | TMS34061 and ITV4400 blitter, two 512 × 256 VRAM pages, MS176 RAMDAC (256 colours) | TMS34061, 64 KB VRAM, 16 colours per line from 4096 | TMS34061 and ITV4400 blitter, 6-bit RAMDAC (256 colours); a 256 × 256 8-bit background and a 4-bit foreground, or Ninja Clowns' two pages (Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck, Rim Rockin' Basketball), or one 8-bit page (Poker Dice) |
+| Display | 362 × 240, 15.686 kHz, 59.64 Hz | 360 × 245 (Bowl-O-Rama 240), vertical, 15.81 kHz, about 60 Hz | 256 × 240, 15.71 kHz, 59.7 Hz; 416 × 240 (Hot Shots Tennis, Peggle) or 392 × 240 (Arlington, Neck-N-Neck, Rim Rockin' Basketball), 15.69 kHz, 59.65 Hz; vertical (Strata Bowling; Hot Shots Tennis, Peggle and Poker Dice turned the other way) or horizontal |
 | Controls | 8-way stick, 3 buttons | trackball (mouse or stick), 2 hook buttons | trackball (mouse or stick) and 2 buttons; or 8-way stick and Swing (golf joystick sets); each other game its own (below) |
 | NVRAM | 16 KB | 2 KB | 8 KB |
 
@@ -137,7 +140,8 @@ ROMs are not included. Copy:
   Bowling sets 2-4 and Coors Light Bowling, Strata Bowling V1, the other
   Golden Tee Golf, Golden Tee Golf II and Golden Par Golf versions, Wheel
   Of Fortune set 2, Hot Shots Tennis v1.0, Arlington Horse Racing v1.21-D
-  and v1.21-I, and the trackball Peggle)
+  and v1.21-I, the trackball Peggle, and Rim Rockin' Basketball v2.0,
+  v1.6, v1.5, v1.2 and the v1.2 bootleg)
 * the newest `Arcade-ITech8_YYYYMMDD.rbf` from `releases/` to `_Arcade/cores/`
 * the MAME ROM sets to `games/mame/`: `ninclown.zip`; `capbowl.zip` (with
   `capbowl2.zip`-`capbowl4.zip` and `clbowl.zip`, or one merged
@@ -148,7 +152,9 @@ ROMs are not included. Copy:
   `gpgolf.zip` (with `gpgolfa.zip` for v1.0, or one merged `gpgolf.zip`);
   `wfortune.zip` (with `wfortunea.zip`); `pokrdice.zip`; `hstennis.zip`
   (with `hstennis10.zip`); `arlingtn.zip` (with `arlingtna.zip` and
-  `arlingtni.zip`); `peggle.zip` (with `pegglet.zip`); `neckneck.zip`.
+  `arlingtni.zip`); `peggle.zip` (with `pegglet.zip`); `neckneck.zip`;
+  `rimrockn.zip` (with `rimrockn20.zip`, `rimrockn16.zip`,
+  `rimrockn15.zip`, `rimrockn12.zip` and `rimrockn12b.zip`).
   Merged sets work as well, each clone inside its parent's zip
 
 Keep only one ITech8 core in `_Arcade/cores/`: MiSTer loads the matching file
@@ -192,6 +198,9 @@ Coin is coin slot 1, the second's slot 2):
 * Peggle: the stick's left and right (joystick set) or the dial (trackball
   set: mouse left-right or the stick), and Start.
 * Neck-N-Neck: Horse 1 to Horse 6 and Start.
+* Rim Rockin' Basketball: stick, Shoot (A), Pass (B) and Start, for each
+  of up to four players on four controllers; player n's Coin is coin slot
+  n. Any player's Service, or OSD Service Mode, opens the service menu.
 
 **Setup menus**, as the operator manuals describe them:
 
@@ -204,9 +213,11 @@ Coin is coin slot 1, the second's slot 2):
   roll the trackball to an item and press any button to change it.
 * Strata Bowling: press Service at any time. Move the trackball up or down
   to an item and press Start; move it left or right to change a value.
+* Rim Rockin' Basketball: press Service (or OSD Service Mode). Player 1's
+  stick up or down selects, Shoot chooses.
 
-**Trackball feel:** OSD Trackball Speed sets how many mouse counts make one
-trackball count (Fast 1, Normal 2, Slow 4). Each game also has its own
+**Trackball feel:** OSD Trackball Options → Trackball Speed sets how many
+mouse counts make one trackball count (Fast 1, Normal 2, Slow 4). Each game also has its own
 setting in its setup menu, which changes how fast a roll sends the ball:
 Capcom Bowling and Coors Light Bowling TRACKBALL TYPE, 0 to 4 (factory 3;
 each step lower doubles the ball speed a roll gives); Bowl-O-Rama 2.0, 2.5
@@ -216,10 +227,25 @@ a Taito Egret II Mini trackball, a tester found Capcom Bowling and Coors Light
 Bowling best at Normal with TRACKBALL TYPE 2. Those two games take a
 sideways roll at half the rate of a forward one, by design (the original
 board and MAME do the same), and start the ball at the edge of the lane.
-OSD Trackball Sideways (1x to 4x) multiplies the sideways counts only, for
+Trackball Sideways (1x to 4x) multiplies the sideways counts only, for
 a small trackball that needs several spins to bring the ball to the
 middle; the forward roll is unchanged. It cannot go past the most the board
 can read, about 28 counts a frame on each axis.
+
+**Trackball presets and calibration:** OSD Trackball Options → Preset
+picks Off (Trackball Speed and Trackball Sideways, as above) or one of
+three presets, each with its own forward gain and sideways gain (12 % to
+800 % of Normal); only the chosen preset's lines are shown. Calibrate
+trackball (the bowling games and the golf trackball sets) fills the chosen
+preset for you, or Preset 1 when Preset is Off: it asks for three throws
+or swings as hard as in play and measures them the way the game does, so
+that a hard throw just reaches the game's top speed or full swing power,
+then, in the bowling games, three sideways rolls, so that a roll moves the
+ball about half the lane. A page over the game shows each try and the
+gains found. Cancel calibration stops it, and it stops by itself after 30
+seconds without a throw; either way the preset is unchanged. It assumes
+the game's own trackball setting is at factory. Save settings in the OSD
+keeps the presets, for that game only.
 
 **Setting up a trackball, spinner or analog controller:** the debug core
 (`Arcade-ITech8_debug`, started by the MRAs in `mra/debug/`) has OSD Debug
@@ -231,15 +257,7 @@ counts in the last frame, the most in one frame, the counts in one roll of
 the ball, reports a second, and the counts dropped above what the game
 can read. Analog shows the paddle and the analog sticks of controllers 1
 and 2 with each one's range. Debug → Clear control counters starts them
-again. Debug → Calibrate trackball (the bowling games and the golf
-trackball sets) asks for three throws or swings as hard as in play,
-measures them the way the game does, and sets Debug → Trackball gain so
-that a hard throw just reaches the game's top speed or full swing power.
-In the bowling games three sideways rolls follow, and Debug → Trackball
-sideways gain is set so that a roll moves the ball about half the lane.
-It assumes the game's own trackball setting is at factory. The gains
-replace Trackball Speed and Trackball Sideways for the mouse and can also
-be set by hand; Save settings in the OSD keeps them, for that game only.
+again.
 
 **OSD:** aspect ratio, scandoubler effects, scaling, CRT Adjust, Service
 Mode and Reset; the games on the IT blitter boards add the audio mix (FM
@@ -248,8 +266,9 @@ Mode and Reset; the games on the IT blitter boards add the audio mix (FM
 in the original cabinets, with its left edge at the bottom, or for Hot
 Shots Tennis, Peggle and Poker Dice at the top; Vertical Flip: for a
 monitor turned the other way, on every output, shown one frame later); the
-trackball games add Trackball Speed and Trackball Sideways, the dial games
-Trackball Speed.
+trackball games add Trackball Options (Preset, Trackball Speed, Trackball
+Sideways, the presets' gains, Calibrate and Cancel calibration), the dial
+games Trackball Options with Trackball Speed.
 
 **NVRAM** (settings, audits and high scores) is saved once each time the OSD
 opens, to `config/nvram/<game name>.nvm`; changing OSD options does not save
