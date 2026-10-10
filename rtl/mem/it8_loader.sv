@@ -34,6 +34,13 @@
 //    018000-057FFF  OKI M6295 samples, 256 KB region       -> SDRAM bank 2
 //    058000-        graphics ROMs, the rest of the stream  -> SDRAM bank 1
 //
+//  With p128 as well (Rim Rockin' Basketball) the main program region is
+//  128 KB, and the parts after it start 64 KB later:
+//
+//    008000-027FFF  main program, 128 KB                   -> SDRAM bank 0
+//    028000-067FFF  OKI M6295 samples, 256 KB region       -> SDRAM bank 2
+//    068000-        graphics ROMs                          -> SDRAM bank 1
+//
 //  grom_bytes is the length of that last part: the blitter's graphics ROM
 //  region (MAME wraps source addresses at the region's length).
 //
@@ -48,6 +55,7 @@ module it8_loader
 	input             recheck,        // pulse: read the loaded image back again
 	input             cb,             // Capcom Bowling board stream layout
 	input             m09,            // itech8 6809 board stream layout
+	input             p128,           // m09: 128 KB main program region
 	input             nv_guard,       // refuse an all-zero NVRAM file
 	input             dl,             // ioctl_download && index 0
 	input             nv_dl,          // ioctl_download && index 4 (NVRAM file)
@@ -100,12 +108,13 @@ reg        ver_wait;
 assign dl_wait = (wr_req != wr_ack);
 assign busy    = nv_fill | nv_dl_d;
 
-// Word index of the SDRAM part of the stream -> SDRAM word address.
-function [23:0] sdram_word(input [20:0] w, input c, input m);
+// Word index of the SDRAM part of the stream -> SDRAM word address. pw is
+// the 6809 main program region in words (32K, or 64K with p128).
+function [23:0] sdram_word(input [20:0] w, input c, input m, input [20:0] pw);
 	if (m) begin
-		if (w < 21'h08000)      sdram_word = {3'h0, w};
-		else if (w < 21'h28000) sdram_word = 24'h800000 + {3'h0, w - 21'h08000};
-		else                    sdram_word = 24'h400000 + {3'h0, w - 21'h28000};
+		if (w < pw)                  sdram_word = {3'h0, w};
+		else if (w < pw + 21'h20000) sdram_word = 24'h800000 + {3'h0, w - pw};
+		else                         sdram_word = 24'h400000 + {3'h0, w - pw - 21'h20000};
 	end
 	else if (c) begin
 		if (w < 21'h10000)      sdram_word = {3'h0, w};
@@ -118,6 +127,9 @@ function [23:0] sdram_word(input [20:0] w, input c, input m);
 		else                    sdram_word = 24'h800000 + {3'h0, w - 21'hE0000};
 	end
 endfunction
+
+wire [20:0] prog_w    = p128 ? 21'h10000 : 21'h08000;
+wire [26:0] grom_from = p128 ? 27'h068000 : 27'h058000;
 
 // Stream bytes that go to SDRAM, and their word index in the SDRAM part.
 wire        to_sdram = m09 ? (dl_addr >= 27'h008000 && dl_addr < 27'h200000) :
@@ -170,13 +182,13 @@ always @(posedge clk) begin
 			if (to_sdram) begin
 				if (!dl_addr[0]) even_byte <= dl_data;
 				else begin
-					wr_addr <= sdram_word(dl_word, cb, m09);
+					wr_addr <= sdram_word(dl_word, cb, m09, prog_w);
 					wr_data <= {even_byte, dl_data};
 					wr_req  <= ~wr_req;
 					words   <= words + 21'd1;
 				end
 				sum_w <= sum_w + {24'd0, dl_data};
-				if (m09 && dl_addr >= 27'h058000) grom_bytes <= dl_addr[23:0] - 24'h058000 + 24'd1;
+				if (m09 && dl_addr >= grom_from) grom_bytes <= dl_addr[23:0] - grom_from[23:0] + 24'd1;
 				if (!cb && !m09 && dl_addr < 27'd8) begin
 					vec_we   <= 1'b1;
 					vec_addr <= dl_addr[2:0];
@@ -207,7 +219,7 @@ always @(posedge clk) begin
 					loaded  <= 1'b1;
 				end
 				else begin
-					ver_addr <= sdram_word(ver_idx, cb, m09);
+					ver_addr <= sdram_word(ver_idx, cb, m09, prog_w);
 					ver_req  <= ~ver_req;
 					ver_wait <= 1'b1;
 				end
