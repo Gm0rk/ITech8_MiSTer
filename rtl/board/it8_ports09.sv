@@ -1,9 +1,10 @@
 //============================================================================
 //  Incredible Technologies 8-bit hardware for MiSTer
-//  it8_ports09.sv - input ports 40, 60 and 80 of the itech8 6809 boards
+//  it8_ports09.sv - input ports 40, 60 and 80 of the itech8 6809 boards, and
+//  Rim Rockin' Basketball's 161-165
 //
 //  Active low except the sound board's feedback bit (special, port 40 bit 0
-//  in every layout but Golden Par Golf's). Unused and unknown bits read 1,
+//  in every layout but Golden Par Golf's and Rim Rockin' Basketball's). Unused and unknown bits read 1,
 //  DIP switches their MAME defaults.
 //
 //  layout 0, the games added before build 020, from p1/p2 (the Ninja
@@ -16,7 +17,7 @@
 //    as gpgolf; port 60 player 1's start and face buttons, port 80 player
 //    2's.
 //
-//  Other layouts take each player's MiSTer joystick as it comes (j0-j2):
+//  Other layouts take each player's MiSTer joystick as it comes (j0-j3):
 //  bits 3-0 up, down, left, right, then the buttons in the order the MRA
 //  names them, listed here. Player 1's Coin is coin 1, player 2's coin 2;
 //  any player's Service is the service switch.
@@ -30,7 +31,10 @@
 //    6  Peggle (stick)     Start, Coin, Service
 //    7  Peggle (trackball) Start, Coin, Service; the dial on register 13
 //    8  Neck-N-Neck        Horse 1-6, Start, Coin, Service
-//  (2 is kept for Grudge Match, 9 for Rim Rockin' Basketball.)
+//    9  Rim Rockin'        Shoot, Pass, Start, Coin, Service (players 1-4;
+//       Basketball         player n's Coin is coin n; any player's Service,
+//                          or OSD Service Mode, the service menu switch)
+//  (2 is kept for Grudge Match.)
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -51,13 +55,15 @@ module it8_ports09
 	input      [15:0] j0,             // other layouts, active high
 	input      [15:0] j1,
 	input      [15:0] j2,
+	input      [15:0] j3,
 
 	input             test,           // OSD Service Mode
 	input             special,        // sound board feedback
 
 	output reg  [7:0] in40,
 	output reg  [7:0] in60,
-	output reg  [7:0] in80
+	output reg  [7:0] in80,
+	output     [39:0] inx             // layout 9: ports {165, 164, 163, 162, 161}
 );
 
 // Stick bits of a MiSTer joystick.
@@ -91,6 +97,7 @@ end
 wire c1  = j0[coin_b];
 wire c2  = j1[coin_b];
 wire svc = j0[svc_b] | j1[svc_b] | j2[svc_b] | test;
+wire svc_rr = j0[8] | j1[8] | j2[8] | j3[8] | test;      // layout 9
 
 always @(*) begin
 	in80 = 8'hFF;
@@ -139,6 +146,15 @@ always @(*) begin
 			in80 = {~c2, 7'h7F};
 		end
 
+		// Rim Rockin' Basketball (MAME rimrockn): port 60 bit 0 Service 1
+		// (a service credit, not used here), 1 the service menu switch, 2-5
+		// coins 1-4, 7 the sound board's feedback; ports 40 and 80 unused
+		// (ports 161-165 below).
+		4'd9: begin
+			in40 = 8'hFF;
+			in60 = {special, 1'b1, ~j3[7], ~j2[7], ~j1[7], ~j0[7], ~svc_rr, 1'b1};
+		end
+
 		// Neck-N-Neck (MAME neckneck): port 40 bit 3 a switch (default
 		// off); port 60 bit 2 Horse 3, 3 Horse 2, 4 Start, 5 Horse 1, 7 coin
 		// 1; port 80 bit 3 Horse 4, 4 Horse 6, 5 Horse 5, 7 coin 2.
@@ -155,6 +171,22 @@ always @(*) begin
 		end
 	endcase
 end
+
+// Rim Rockin' Basketball's ports 161-164, one a player: bit 7 Start, 6 up,
+// 5 down, 4 left, 3 right; players 1 and 2 bit 2 Shoot and 1 Pass,
+// players 3 and 4 bit 0 Shoot and 1 Pass. Port 165: bits 0-2 Service 2-4
+// (service credits, not used), then MAME's default switches: Cabinet 4
+// players (bits 4-3 = 0), Coin Slots Individual (bit 5 = 0), Video Sync
+// Negative (bit 6 = 0).
+function [7:0] rr_p12(input [15:0] j);
+	rr_p12 = ~{j[6], `UP(j), `DOWN(j), `LEFT(j), `RIGHT(j), j[4], j[5], 1'b0};
+endfunction
+function [7:0] rr_p34(input [15:0] j);
+	rr_p34 = ~{j[6], `UP(j), `DOWN(j), `LEFT(j), `RIGHT(j), 1'b0, j[5], j[4]};
+endfunction
+
+assign inx = {{1'b1, 1'b0, 1'b0, 2'b00, 3'b111},
+              rr_p34(j3), rr_p34(j2), rr_p12(j1), rr_p12(j0)};
 
 `undef UP
 `undef DOWN
