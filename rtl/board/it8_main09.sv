@@ -2,8 +2,8 @@
 //  Incredible Technologies 8-bit hardware for MiSTer
 //  it8_main09.sv - 6809 main CPU of the itech8 6809 boards
 //
-//  68B09 at 2 MHz. Memory map (MAME itech8.cpp common_hi_map, the Strata
-//  Bowling layout):
+//  68B09 at 2 MHz (rr: Rim Rockin' Basketball's HD6309 at 3 MHz, below).
+//  Memory map (MAME itech8.cpp common_hi_map, the Strata Bowling layout):
 //
 //    0100         W   (unused)
 //    0120         W   sound command
@@ -39,6 +39,21 @@
 //  1100-11FF, everything else in place. Bit 12 of the address is turned
 //  over for the TMS34061 and I/O decodes only.
 //
+//  rr selects Rim Rockin' Basketball's board (MAME rimrockn_map, D-047):
+//  the layout above with
+//
+//    0161-0165    R   input ports 161-165 (players 1-4, service and
+//                     switches; it8_ports09 inx)
+//    01A0         W   program ROM bank (bits 1-0) instead of the NMI
+//                     acknowledge; blitter register 7 does not bank
+//    4000-7FFF    R   program ROM, banked: 16 KB bank 0-3 of its first 64 KB
+//    8000-FFFF    R   program ROM, fixed: the last 32 KB of 128 KB
+//
+//  and the CPU at 3 MHz: an HD6309 at 12 MHz in MAME. The game runs the
+//  6309 as a 6809 (no 6309-only instruction or register in about 100
+//  million traced in MAME, D-047), where the 6309 takes the 6809's cycles,
+//  so mc6809is runs it on a 16-clock E cycle.
+//
 //  tb_horiz gives the trackball the horizontal games' axes (MAME gtgt:
 //  register 12 is X, right positive; 13 is Y, up positive); without it the
 //  vertical games' (stratab: 12 is Y and 13 X, counting down for up and
@@ -56,9 +71,9 @@
 //  from the blitter.
 //
 //  The program ROM is in SDRAM bank 0. The CPU runs on its own E cycle of
-//  24 clocks: every access starts in the first clock, and E falls only once
-//  it has finished, so a late SDRAM read stretches the cycle (as on the
-//  Capcom Bowling board, cb_top.sv).
+//  24 clocks (rr: 16): every access starts in the first clock, and E falls
+//  only once it has finished, so a late SDRAM read stretches the cycle (as
+//  on the Capcom Bowling board, cb_top.sv).
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -72,6 +87,7 @@ module it8_main09
 	input             prog64,         // 64 KB program: fixed area at 0x8000
 	input             map_gtg2,       // Golden Par Golf's I/O layout (above)
 	input             map_lo,         // TMS34061 at 0000, I/O at 1100 (above)
+	input             rr,             // Rim Rockin' Basketball's board (above)
 	input             tb_horiz,       // trackball axes of a horizontal game
 	input       [1:0] dial_mode,      // spinner on register 13 (above)
 
@@ -79,6 +95,7 @@ module it8_main09
 	input       [7:0] in40,
 	input       [7:0] in60,
 	input       [7:0] in80,
+	input      [39:0] inx,            // rr: ports 161-165, {165, 164, 163, 162, 161}
 	input       [7:0] track_x,        // player 1 trackball counters, right = up
 	input       [7:0] track_y,        // ... up = up
 
@@ -132,24 +149,27 @@ module it8_main09
 // ---------------------------------------------------------------------------
 // E cycle
 
+// 24 clocks (2 MHz), or 16 (3 MHz) with rr; Q falls three quarters in.
 reg   [4:0] ph;
 reg         busy;
-wire        fall_e = (ph == 5'd23) && !busy && !hold;
-wire        fall_q = (ph == 5'd17) && !hold;
+wire  [4:0] ph_last = rr ? 5'd15 : 5'd23;
+wire        fall_e = (ph == ph_last) && !busy && !hold;
+wire        fall_q = (ph == (rr ? 5'd11 : 5'd17)) && !hold;
 wire        acc    = (ph == 5'd0)  && !hold && !reset;
 
 // The cycle keeps running through reset: mc6809is applies its reset only on
 // its E and Q enables.
 always @(posedge clk) begin
 	if (!hold) begin
-		if (ph != 5'd23) ph <= ph + 5'd1;
-		else if (!busy)  ph <= 5'd0;
+		if (ph < ph_last) ph <= ph + 5'd1;
+		else if (!busy)   ph <= 5'd0;
 	end
 end
 
 // ROM reads only start in clock 0 of a cycle, so refresh is safe while the
-// cycle is well under way and nothing is outstanding.
-assign rom_quiet = reset || (!rom_req && !busy && ph >= 5'd1 && ph <= 5'd16);
+// cycle is well under way (at least 7 clocks from its end) and nothing is
+// outstanding.
+assign rom_quiet = reset || (!rom_req && !busy && ph >= 5'd1 && ph <= (rr ? 5'd9 : 5'd16));
 
 // ---------------------------------------------------------------------------
 // 6809
@@ -203,6 +223,8 @@ wire sel_blt   = map_gtg2 ? (a_io[15:5] == 11'b0000_0001_100)   // 0180-019F
 wire sel_dac   = map_gtg2 ? (a_io[15:5] == 11'b0000_0001_010)   // 0140-015F
                           : (a_io[15:5] == 11'b0000_0001_111);  // 01E0-01FF
 wire sel_tms   = (a_io[15:12] == 4'h1);
+wire sel_inx   = rr && (a_io >= 16'h0161) && (a_io <= 16'h0165);
+wire sel_bnk2  = rr && (a_io == 16'h01A0);
 wire sel_nv    = (addr[15:13] == 3'b001);
 wire sel_bank  = (addr[15:14] == 2'b01);
 wire sel_fixed = addr[15];
@@ -234,11 +256,20 @@ assign an = (dial_mode != 2'd0) ? {8'h00, 8'h00, dial, 8'h00} :
 // Bus
 
 reg        bank;
+reg  [1:0] bank2;                  // rr: the bank register at 01A0
 reg        rom_wait, rom_lo, tms_wait, rd_d;
 reg  [3:0] rd_src;                 // one-hot: blitter, NVRAM, input port, zero
 reg  [7:0] in_val;
 
-wire [15:0] rom_byte = sel_fixed ? {prog64, addr[14:0]} : {1'b0, bank ^ bank_xor, addr[13:0]};
+// Byte address in the program ROM: 32 or 64 KB (fixed area its last 32 KB,
+// banks 0-1 from 0), or with rr 128 KB (fixed area 18000, banks 0-3 from 0).
+wire [16:0] rom_byte = sel_fixed ? {rr, rr | prog64, addr[14:0]}
+                                 : rr ? {1'b0, bank2, addr[13:0]}
+                                      : {2'b00, bank ^ bank_xor, addr[13:0]};
+
+// rr: port 161 + n
+wire  [2:0] inx_n  = a_io[2:0] - 3'd1;
+wire  [7:0] inx_v  = inx[8 * inx_n +: 8];
 
 always @(posedge clk) begin
 	tms_start <= 1'b0;
@@ -257,6 +288,7 @@ always @(posedge clk) begin
 		rom_wait  <= 1'b0;
 		tms_wait  <= 1'b0;
 		bank      <= 1'b0;
+		bank2     <= 2'd0;
 		grom_bank <= 8'h00;
 		page      <= 8'hC0;           // MAME video_start
 		ref_x     <= track_x;
@@ -268,7 +300,7 @@ always @(posedge clk) begin
 		if (acc) begin
 			if (rnw) begin
 				if (sel_fixed || sel_bank) begin
-					rom_addr <= {7'd0, rom_byte[15:1]};
+					rom_addr <= {6'd0, rom_byte[16:1]};
 					rom_lo   <= rom_byte[0];
 					rom_req  <= 1'b1;
 					rom_wait <= 1'b1;
@@ -285,19 +317,20 @@ always @(posedge clk) begin
 					rd_d    <= 1'b1;
 					blt_idx <= addr[4:1];
 					if (sel_blt) blt_re <= 1'b1;
-					rd_src  <= {sel_blt, sel_nv, sel_in40 | sel_in60 | sel_in80, 1'b0};
-					in_val  <= sel_in40 ? in40 : sel_in60 ? in60 : in80;
+					rd_src  <= {sel_blt, sel_nv, sel_in40 | sel_in60 | sel_in80 | sel_inx, 1'b0};
+					in_val  <= sel_inx ? inx_v : sel_in40 ? in40 : sel_in60 ? in60 : in80;
 				end
 			end
 			else begin
 				if (sel_snd)   snd_we    <= 1'b1;
+				if (sel_bnk2)  bank2     <= cpu_dout[1:0];
 				if (sel_grom)  grom_bank <= cpu_dout;
 				if (sel_page)  page      <= cpu_dout;
 				if (sel_latch) latch_we  <= 1'b1;
 				if (sel_blt) begin
 					blt_idx <= addr[4:1];
 					blt_we  <= 1'b1;
-					if (addr[4:1] == 4'd7) bank <= cpu_dout[5];
+					if (addr[4:1] == 4'd7 && !rr) bank <= cpu_dout[5];
 					if (addr[4:1] == 4'd12) begin
 						ref_x <= track_x;
 						ref_y <= track_y;
