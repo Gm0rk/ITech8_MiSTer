@@ -39,8 +39,11 @@
 //  two layers, 1 Ninja Clowns' 2 page large at 8 MHz with the page bit
 //  inverted, MAME hstennis; 2 one 8-bit page, MAME pokrdice), a sound board
 //  (snd_mode: 0 as above, 1 the YM3812 board with a PIA, MAME
-//  sound3812_map) and an input layout (in_layout, it8_ports09.sv: 0 the
-//  ports above, others a game's own from the raw joysticks j0r-j2r).
+//  sound3812_map; 2 the YM3812 board with a VIA, as Ninja Clowns', without
+//  Golden Par Golf's I/O) and an input layout (in_layout, it8_ports09.sv: 0
+//  the ports above, others a game's own from the raw joysticks j0r-j3r).
+//  rr (build 026) is Rim Rockin' Basketball's board: it8_main09 at 3 MHz
+//  with its bank register, 128 KB program and ports 161-165.
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -71,6 +74,7 @@ module it8_top
 	input             gtg2,           // 6809: Golden Par Golf's board (above)
 	input             tb09,           // 6809: the game has a trackball
 	input             map_lo,         // 6809: MAME common_lo_map (it8_main09)
+	input             rr,             // 6809: Rim Rockin' Basketball's board (it8_main09)
 	input             tb_horiz,       // 6809: trackball axes of a horizontal game
 	input       [1:0] disp_mode,      // 6809: display layout (above)
 	input       [1:0] snd_mode,       // 6809: sound board (above)
@@ -89,6 +93,7 @@ module it8_top
 	input      [15:0] j0r,            // 6809, in_layout != 0: MiSTer joysticks
 	input      [15:0] j1r,            //   as they come (it8_ports09)
 	input      [15:0] j2r,
+	input      [15:0] j3r,
 
 	// SDRAM: 68000 program ROM
 	output            rom_req,
@@ -536,6 +541,7 @@ it8_video video
 
 // Input ports (it8_ports09.sv).
 wire  [7:0] in40_09, in60_09, in80_09;
+wire [39:0] inx_09;
 
 it8_ports09 ports09
 (
@@ -551,11 +557,13 @@ it8_ports09 ports09
 	.j0      (j0r),
 	.j1      (j1r),
 	.j2      (j2r),
+	.j3      (j3r),
 	.test    (test),
 	.special (special),
 	.in40    (in40_09),
 	.in60    (in60_09),
-	.in80    (in80_09)
+	.in80    (in80_09),
+	.inx     (inx_09)
 );
 
 // A dial on blitter register 13 (it8_main09): Wheel Of Fortune's reads the
@@ -577,11 +585,13 @@ it8_main09 main09
 	.prog64       (prog64),
 	.map_gtg2     (gtg2),
 	.map_lo       (map_lo),
+	.rr           (rr),
 	.tb_horiz     (tb_horiz),
 	.dial_mode    (dial_mode),
 	.in40         (in40_09),
 	.in60         (in60_09),
 	.in80         (in80_09),
+	.inx          (inx_09),
 	.track_x      (track_x),
 	.track_y      (track_y),
 	.rom_req      (m9_rom_req),
