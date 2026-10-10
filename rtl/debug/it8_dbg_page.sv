@@ -36,6 +36,10 @@
 //  N_MSG lines of MSGS (COLS characters each, line 0 first), picked by msg_a
 //  and msg_b: the calibration page's changing prompts.
 //
+//  Used by the debug build's Trackball and Analog pages (it8_dbg_ctrl.sv)
+//  and, in both builds, by the trackball calibration's page
+//  (cb_trackball_cal.sv).
+//
 //  The page sits at (BOX_X, BOX_Y) of the viewer's picture, as tall as its
 //  rows. Output is two clocks behind vis_x / vis_y, as it8_dbg_text's.
 //
