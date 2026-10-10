@@ -12,11 +12,12 @@
 #                  Vertical Flip frame buffer
 #      sound/      the external YM3812 sound board: 6809 glue, 6522 VIA
 #      mem/        FPGA side only: block RAM templates, SDRAM, ROM loader
-#      debug/      the diagnostic overlay: Board and Controls pages (debug
-#                  revision)
+#      debug/      the diagnostic overlay: Board, Trackball and Analog pages
+#                  (debug revision); it8_dbg_page also draws the trackball
+#                  calibration's page in both
 #      cb/         the earlier Capcom Bowling board (also Coors Light
 #                  Bowling and Bowl-O-Rama): main board, video, sound board,
-#                  trackball
+#                  trackball and its calibration (every trackball game)
 #
 #  Third-party code (fx68k, mc6809, jtopl, jt6295, jt12/jt03, CRT Adjust) is
 #  under rtl/, each in its own folder with its licence.
@@ -55,13 +56,13 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/it8_sound.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_video.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_sound.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_trackball.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_trackball_cal.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/cb/cb_top.sv
 
 # --- Diagnostic overlay ----------------------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_text.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_page.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_ctrl.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/it8_dbg_cal.sv
 
 # --- CRT Adjust (rmonic79), core-side --------------------------------------
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/crt/crt_adjust.sv
