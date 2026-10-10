@@ -70,21 +70,38 @@ assign BUTTONS   = 0;
 localparam CRT_S5 = "0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1";
 localparam CRT_HP = "0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,+32,+33,+34,+35,+36,+37,+38,+39,+40,+41,+42,+43,+44,+45,+46,+47,+48,-48,-47,-46,-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1";
 
-`ifdef IT8_DEBUG
-// Debug OSD Trackball gain and Trackball sideways gain (it8_dbg_cal.sv):
-// Off (Trackball Speed, and Trackball Sideways), then 2^((n-25)/8) of Normal
-// for n = 1-49.
+// Trackball preset gains (cb_trackball_cal.sv): after the first entry
+// (Normal, or As forward), 2^((n-25)/8) of Normal for n = 1-49.
 localparam TB_GAINS = "12%,14%,15%,16%,18%,19%,21%,23%,25%,27%,30%,32%,35%,39%,42%,46%,50%,55%,59%,65%,71%,77%,84%,92%,100%,109%,119%,130%,141%,154%,168%,183%,200%,218%,238%,259%,283%,308%,336%,367%,400%,436%,476%,519%,566%,617%,673%,734%,800%";
 
+// OSD Trackball Options (D-046): Preset Off (Trackball Speed and Sideways)
+// or 1-3, each with its own forward and sideways gain; only the lines of the
+// preset chosen show (status_menumask). Preset 1 keeps build 024's bits, so
+// a gain saved then becomes Preset 1. The dial games see Trackball Speed
+// only. Calibrate writes into the preset chosen (Off: Preset 1, chosen).
+localparam CONF_TB = {
+	"H4P3,Trackball Options;",
+	"H4P3-;",
+	"H5P3O[22:21],Preset,Off,1,2,3;",
+	"H6P3O[16:15],Trackball Speed,Normal,Fast,Slow;",
+	"H7P3O[20:19],Trackball Sideways,1x,2x,3x,4x;",
+	"H8P3O[72:67],Forward gain,Normal,", TB_GAINS, ";",
+	"H8P3O[108:103],Sideways gain,As forward,", TB_GAINS, ";",
+	"H9P3O[28:23],Forward gain,Normal,", TB_GAINS, ";",
+	"H9P3O[34:29],Sideways gain,As forward,", TB_GAINS, ";",
+	"HAP3O[40:35],Forward gain,Normal,", TB_GAINS, ";",
+	"HAP3O[46:41],Sideways gain,As forward,", TB_GAINS, ";",
+	"H5P3-;",
+	"H5P3T[73],Calibrate trackball;",
+	"H5P3T[47],Cancel calibration;"
+};
+
+`ifdef IT8_DEBUG
 localparam CONF_DBG = {
 	"P2,Debug;",
 	"P2-;",
 	"P2O[65:64],Diagnostic overlay,Off,Board,Trackball,Analog;",
 	"P2T[66],Clear control counters;",
-	"H5P2-;",
-	"H5P2T[73],Calibrate trackball;",
-	"H5P2O[72:67],Trackball gain,Off,", TB_GAINS, ";",
-	"H5P2O[108:103],Trackball sideways gain,Off,", TB_GAINS, ";",
 	"-;"
 };
 `else
@@ -108,8 +125,7 @@ localparam CONF_STR = {
 	"-;",
 	"H2O[8:7],Audio,FM + PCM,FM only,PCM only;",
 	"H3O[18:17],Orientation,Horizontal,Vertical,Vertical Flip;",
-	"H4O[16:15],Trackball Speed,Normal,Fast,Slow;",
-	"H5O[20:19],Trackball Sideways,1x,2x,3x,4x;",
+	CONF_TB,
 	// The board's service switch: on opens the game's service menu.
 	"O[9],Service Mode,Off,On;",
 	CONF_DBG,
@@ -133,19 +149,20 @@ wire  [15:0] ioctl_index;
 wire         ioctl_wait;
 wire   [7:0] ioctl_din;
 
-wire  [31:0] joystick_0, joystick_1, joystick_2;
+wire  [31:0] joystick_0, joystick_1, joystick_2, joystick_3;
 wire  [24:0] ps2_mouse;
 // For the debug build's Controls page only (it8_dbg_ctrl.sv); no game uses
 // them.
 wire  [15:0] ana_l0, ana_r0, ana_l1, ana_r1;
 wire   [8:0] spinner_0;
 wire   [7:0] paddle_0;
-// Debug build: the trackball calibration writes its gains into the OSD
-// status (hps_io status_set; 0 in the release build), and those gains go
-// to cb_trackball (0: Trackball Speed, and Trackball Sideways for X).
+// The trackball calibration writes its gains into the OSD status (hps_io
+// status_set), and the preset's gains go to cb_trackball (0: Trackball
+// Speed, and Trackball Sideways for X). Section "Trackball presets".
 wire [127:0] cal_status_in;
 wire         cal_status_set;
 wire  [10:0] tb_gain, tb_gain_x;
+wire   [1:0] tb_side;
 wire         video_rotated;
 
 // Board, from the MRA (ioctl index 1). Bits 1:0: 0 Ninja Clowns, 1 Capcom
@@ -158,7 +175,9 @@ wire         video_rotated;
 // bits: bit 0 MAME's common_lo_map (TMS34061 at 0000, I/O at 1100; Golden
 // Tee Golf II joystick); bits 2-1 the display (0 two layers, 1 2 page large
 // at 8 MHz, 2 one 8-bit page); bits 4-3 the sound board (0 as bit 5 of the
-// first byte says, 1 the YM3812 board with a PIA); bit 6 the NVRAM starts
+// first byte says, 1 the YM3812 board with a PIA, 2 the YM3812 board with a
+// VIA); bit 5 Rim Rockin' Basketball's board (3 MHz CPU, bank register at
+// 01A0, 128 KB program, ports 161-165; D-047); bit 6 the NVRAM starts
 // as 00, not FF; bit 7 the game is vertical the other way (MAME ROT90). A third byte is the input layout
 // (it8_ports09.sv; 0 the ports of the games before build 020). Both are
 // cleared with every first byte, so an MRA that sends one byte gets 0.
@@ -175,6 +194,7 @@ wire         has_tb  = is_cb | (is_m09 & board_byte[6]);
 wire         is_gtg2 = is_m09 & board_byte[5];
 wire         one_btn = is_m09 & ~board_byte[6] & (board_byte[2] | board_byte[5]);   // swing only
 wire         map_lo  = is_m09 & board_byte2[0];
+wire         is_rr   = is_m09 & board_byte2[5];
 wire   [1:0] disp_mode = is_m09 ? board_byte2[2:1] : 2'd0;
 wire   [1:0] snd_mode  = is_m09 ? board_byte2[4:3] : 2'd0;
 wire   [3:0] in_layout = is_m09 ? board_byte3[3:0] : 4'd0;
@@ -184,6 +204,7 @@ wire         nv_fill00 = is_br | (is_m09 & board_byte2[6]);           // NVRAM s
 // Clowns and the bowling board).
 wire         dot6      = is_m09 & ~disp_mode[0];
 wire         flip180 = is_vert & (status[18:17] == 2'd2);   // OSD Orientation "Vertical Flip"
+wire   [1:0] tb_preset = has_tb ? status[22:21] : 2'd0;           // OSD Trackball Options Preset
 
 // Declared here because hps_io and the loader use them before the board.
 wire         nv_written;
@@ -217,7 +238,9 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 
 	.buttons            (buttons),
 	.status             (status),
-	.status_menumask    ({10'd0, ~has_tb, ~(has_tb | has_dial), ~is_vert, is_cb, ~status[101], 1'b0}),
+	.status_menumask    ({5'd0, tb_preset != 2'd3, tb_preset != 2'd2, tb_preset != 2'd1,
+	                      ~has_tb | (tb_preset != 2'd0), has_tb & (tb_preset != 2'd0),
+	                      ~has_tb, ~(has_tb | has_dial), ~is_vert, is_cb, ~status[101], 1'b0}),
 	.status_in          (cal_status_in),
 	.status_set         (cal_status_set),
 
@@ -236,6 +259,7 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 	.joystick_0         (joystick_0),
 	.joystick_1         (joystick_1),
 	.joystick_2         (joystick_2),
+	.joystick_3         (joystick_3),
 	.joystick_l_analog_0 (ana_l0),
 	.joystick_r_analog_0 (ana_r0),
 	.joystick_l_analog_1 (ana_l1),
@@ -383,6 +407,7 @@ it8_loader loader
 	.recheck      (user_reset & ~user_reset_d),
 	.cb           (is_cb),
 	.m09          (is_m09),
+	.p128         (is_rr),
 	.nv_guard     (~is_cb & ~is_m09),
 	.dl           (rom_dl),
 	.nv_dl        (ioctl_download & nv_io),
@@ -484,7 +509,7 @@ cb_trackball trackball
 	.speed     (status[16:15]),
 	.gain      (tb_gain),
 	.gain_x    (tb_gain_x),
-	.side      (status[20:19]),
+	.side      (tb_side),
 	.per_frame (is_m09),
 	.x         (track_x),
 	.y         (track_y),
@@ -515,6 +540,7 @@ it8_top board
 	.gtg2          (is_gtg2),
 	.tb09          (has_tb),
 	.map_lo        (map_lo),
+	.rr            (is_rr),
 	.tb_horiz      (~board_byte[7]),
 	.disp_mode     (disp_mode),
 	.snd_mode      (snd_mode),
@@ -527,6 +553,7 @@ it8_top board
 	.j0r           (joystick_0[15:0]),
 	.j1r           (joystick_1[15:0]),
 	.j2r           (joystick_2[15:0]),
+	.j3r           (joystick_3[15:0]),
 	.cpu_phi1      (cpu_phi1),
 	.cpu_phi2      (cpu_phi2),
 	.pix_ce        (pix_ce),
@@ -681,13 +708,14 @@ wire [15:0] audio   = is_cb ? cb_audio : it8_audio;
 assign AUDIO_L = audio;
 assign AUDIO_R = audio;
 
-///////////////////////   DIAGNOSTIC OVERLAY   ///////////////////
+///////////////////////   OVERLAY   ///////////////////////////////
 
-// The panel is drawn after Vertical Flip turns the picture (video output
-// section), so it stays upright: ov_hit is a text pixel, ov_blk the box.
+// Pages drawn over the picture: the trackball calibration's (both builds)
+// and, in the debug build, the diagnostic overlay. They are drawn after
+// Vertical Flip turns the picture (video output section), so they stay
+// upright: ov_hit is a text pixel, ov_blk the box.
 wire ov_hit, ov_blk;
 
-`ifdef IT8_DEBUG
 reg  [8:0] vis_x;
 reg  [7:0] vis_y;
 reg        hb_d;
@@ -704,6 +732,99 @@ always @(posedge clk_sys) begin
 	end
 end
 
+// A page is written once a frame from the start of vertical blanking, and
+// turned to read upright with the game: cp_rot is how the viewer sees the
+// raster, turned anticlockwise for MAME ROT270 (as screen_rotate, or a
+// monitor on its side), clockwise for ROT90, and the other way after
+// Vertical Flip, which turns the picture under the overlay.
+reg        cp_vb_d = 1'b0;
+always @(posedge clk_sys) if (ce_pix) cp_vb_d <= core_vb;
+wire       cp_frame = ce_pix & core_vb & ~cp_vb_d;
+wire [1:0] cp_rot   = ~is_vert ? 2'd0 : (~rot90 ^ flip180) ? 2'd1 : 2'd2;
+
+///////////////////////   TRACKBALL PRESETS   //////////////////////
+
+// OSD Trackball Options (D-046). Preset Off: Trackball Speed and Trackball
+// Sideways, as before. Preset 1-3: that preset's forward gain (Normal =
+// 100 %) and sideways gain (As forward = the forward gain, Sideways 1x),
+// whatever Speed and Sideways say. The stick is not affected.
+wire  [5:0] pre_f = (tb_preset == 2'd1) ? status[72:67] :
+                    (tb_preset == 2'd2) ? status[28:23] : status[40:35];
+wire  [5:0] pre_x = (tb_preset == 2'd1) ? status[108:103] :
+                    (tb_preset == 2'd2) ? status[34:29] : status[46:41];
+wire [10:0] pre_gain, pre_gain_x;          // their gains (cb_trackball_cal.sv), 0 for 0
+
+assign tb_gain   = (tb_preset == 2'd0) ? 11'd0 : (pre_gain != 11'd0) ? pre_gain : 11'd128;
+assign tb_gain_x = (tb_preset == 2'd0) ? 11'd0 : pre_gain_x;
+assign tb_side   = (tb_preset == 2'd0) ? status[20:19] : 2'd0;
+
+// Trackball calibration (D-044 to D-046): OSD Trackball Options > Calibrate
+// trackball (status bit 73) starts it, Cancel calibration (47) stops it.
+// The preset chosen when it starts receives the gains (Off: Preset 1, which
+// is then chosen), in one status write with the trigger bits cleared so
+// the write does not start it again. cal_kind is how the game measures a
+// throw.
+reg        cal_trig_d = 1'b0, cal_cncl_d = 1'b0;
+reg  [1:0] cal_tgt = 2'd1;
+wire       cal_start  = status[73] & ~cal_trig_d;
+wire       cal_cancel = status[47] & ~cal_cncl_d;
+always @(posedge clk_sys) begin
+	cal_trig_d <= status[73];
+	cal_cncl_d <= status[47];
+	if (cal_start) cal_tgt <= (tb_preset == 2'd0) ? 2'd1 : tb_preset;
+end
+wire [1:0] cal_kind   = ~has_tb ? 2'd0 : is_br ? 2'd2 : (is_m09 & ~board_byte[7]) ? 2'd3 : 2'd1;
+wire       cal_active, cal_wr, cal_pix, cal_box;
+wire [5:0] cal_gain, cal_gain_x;
+reg  [127:0] cal_st;
+
+always @(*) begin
+	cal_st      = status;
+	cal_st[0]   = 1'b0;                  // reset
+	cal_st[47]  = 1'b0;                  // Cancel calibration
+	cal_st[66]  = 1'b0;                  // debug Clear control counters
+	cal_st[73]  = 1'b0;                  // Calibrate trackball
+	cal_st[22:21] = cal_tgt;
+	case (cal_tgt)
+		2'd2:    begin cal_st[28:23]  = cal_gain; cal_st[34:29]   = cal_gain_x; end
+		2'd3:    begin cal_st[40:35]  = cal_gain; cal_st[46:41]   = cal_gain_x; end
+		default: begin cal_st[72:67]  = cal_gain; cal_st[108:103] = cal_gain_x; end
+	endcase
+end
+
+assign cal_status_in  = cal_st;
+assign cal_status_set = cal_wr;
+
+cb_trackball_cal tb_cal
+(
+	.clk        (clk_sys),
+	.reset      (reset),
+	.start      (cal_start),
+	.cancel     (cal_cancel),
+	.frame      (cp_frame),
+	.ps2_mouse  (ps2_mouse),
+	.kind       (cal_kind),
+	.preset     (cal_tgt),
+	.active     (cal_active),
+	.gain_n     (cal_gain),
+	.gain_x_n   (cal_gain_x),
+	.wr         (cal_wr),
+	.sel        (pre_f),
+	.sel_x      (pre_x),
+	.sel_gain   (pre_gain),
+	.sel_gain_x (pre_gain_x),
+	.ce         (ce_pix),
+	.de         (~core_hb & ~core_vb),
+	.vis_x      (vis_x),
+	.vis_y      (vis_y),
+	.rot        (cp_rot),
+	.pix        (cal_pix),
+	.in_box     (cal_box)
+);
+
+///////////////////////   DIAGNOSTIC OVERLAY (debug)   /////////////
+
+`ifdef IT8_DEBUG
 // BLD: compile date (YYMMDD from build_id.v) then the build number.
 localparam [47:0] BLD_DATE = `BUILD_DATE;
 // The digits are worked out as integers and cut to four bits, so the lint
@@ -771,41 +892,16 @@ it8_dbg_text #(
 
 // Trackball and Analog pages (D-042, D-043): what the mouse, spinner,
 // paddle and analog sticks send and what reaches the game's trackball
-// counters. A page is written once a frame from the start of vertical
-// blanking, and turned to read upright with the game: cp_rot is how the
-// viewer sees the raster, turned anticlockwise for MAME ROT270 (as
-// screen_rotate, or a monitor on its side), clockwise for ROT90, and the
-// other way after Vertical Flip, which turns the picture under the overlay.
-// OSD Clear control counters, or a reset, starts the counts again.
-reg        cp_vb_d = 1'b0, cp_clr_d = 1'b0;
-always @(posedge clk_sys) begin
-	if (ce_pix) cp_vb_d <= core_vb;
-	cp_clr_d <= status[66];
-end
-wire       cp_frame = ce_pix & core_vb & ~cp_vb_d;
-wire [1:0] cp_rot   = ~is_vert ? 2'd0 : (~rot90 ^ flip180) ? 2'd1 : 2'd2;
+// counters, turned as the calibration's page. OSD Clear control counters,
+// or a reset, starts the counts again.
+reg        cp_clr_d = 1'b0;
+always @(posedge clk_sys) cp_clr_d <= status[66];
 wire [3:0] tb_div   = (tb_gain != 11'd0)      ? 4'd0 :
                       (status[16:15] == 2'd1) ? 4'd1 : (status[16:15] == 2'd2) ? 4'd4 : 4'd2;
-
-// Trackball calibration (D-044, D-045): OSD Debug > Calibrate trackball
-// (status bit 73) starts it; the gains found go to Trackball gain (72:67)
-// and Trackball sideways gain (108:103), with the trigger bits cleared so
-// the write does not start it again. cal_kind is how the game measures a
-// throw (it8_dbg_cal.sv).
-reg        cal_trig_d = 1'b0;
-always @(posedge clk_sys) cal_trig_d <= status[73];
-wire       cal_start = status[73] & ~cal_trig_d;
-wire [1:0] cal_kind  = ~has_tb ? 2'd0 : is_br ? 2'd2 : (is_m09 & ~board_byte[7]) ? 2'd3 : 2'd1;
-wire       cal_active, cal_wr;
-wire [5:0] cal_gain, cal_gain_x;
-
-assign cal_status_in  = {status[127:109], cal_gain_x, status[102:74], 1'b0, cal_gain, 1'b0, status[65:1], 1'b0};
-assign cal_status_set = cal_wr;
 
 it8_dbg_ctrl dbg_ctrl
 (
 	.clk       (clk_sys),
-	.reset     (reset),
 	.clear     (reset | (status[66] & ~cp_clr_d)),
 	.frame     (cp_frame),
 	.ps2_mouse (ps2_mouse),
@@ -820,37 +916,23 @@ it8_dbg_ctrl dbg_ctrl
 	.drop_x    (track_drop_x),
 	.drop_y    (track_drop_y),
 	.div       (tb_div),
-	.side      ((tb_gain_x != 11'd0) ? 3'd0 : {1'b0, status[20:19]} + 3'd1),
+	.side      ((tb_gain_x != 11'd0) ? 3'd0 : {1'b0, tb_side} + 3'd1),
 	.ce        (ce_pix),
 	.de        (~core_hb & ~core_vb),
 	.vis_x     (vis_x),
 	.vis_y     (vis_y),
 	.rot       (cp_rot),
 	.page      (status[64]),
-	.cal_start (cal_start),
-	.cal_kind  (cal_kind),
-	.cal_active(cal_active),
-	.cal_gain  (cal_gain),
-	.cal_gain_x(cal_gain_x),
-	.cal_wr    (cal_wr),
-	.gain_sel  (status[72:67]),
-	.gain_x_sel(status[108:103]),
-	.gain      (tb_gain),
-	.gain_x    (tb_gain_x),
 	.pix       (cp_pix),
 	.in_box    (cp_box)
 );
 
-// The calibration page shows while it runs, whatever the overlay setting.
-assign ov_hit = (ov_on & ov_pix) | ((cp_on | cal_active) & cp_pix);
-assign ov_blk = (ov_on & ov_box) | ((cp_on | cal_active) & cp_box);
+// The calibration page, while it is up, in place of the others.
+assign ov_hit = cal_active ? cal_pix : (ov_on & ov_pix) | (cp_on & cp_pix);
+assign ov_blk = cal_active ? cal_box : (ov_on & ov_box) | (cp_on & cp_box);
 `else
-assign ov_hit = 1'b0;
-assign ov_blk = 1'b0;
-assign cal_status_in  = 128'd0;
-assign cal_status_set = 1'b0;
-assign tb_gain        = 11'd0;
-assign tb_gain_x      = 11'd0;
+assign ov_hit = cal_active & cal_pix;
+assign ov_blk = cal_active & cal_box;
 `endif
 
 ///////////////////////   VIDEO OUTPUT (clk_vid, 96 MHz)   ///////
