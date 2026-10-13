@@ -22,6 +22,17 @@
 //    256 x 256, the page chosen by page_sel; timed as two_layer (6 MHz,
 //    column 0 at END BLANK).
 //
+//  * gm, Grudge Match (MAME grmatch_state::screen_update, D-048): two
+//    4-bit layers, two pixels a byte (upper nibble first) as 2 page large,
+//    and timed as it (8 MHz, column 0 at END BLANK). Page 0 is the top
+//    layer, shown wherever its pixel is not 0, page 1 the bottom layer.
+//    Each layer has its own TMS34070 palette of 16 12-bit colours, which
+//    the hardware loads from video RAM: the first 32 bytes at the display
+//    start of each page (R = byte 0 bits 3-0, G and B = byte 1). gm_scroll
+//    is ORed into the display start's low byte. A line starting at column
+//    c of a row runs on into the next row (MAME reads the bytes in a row,
+//    as here: 200 bytes from c).
+//
 //  The 6809 games of Hot Shots Tennis style use the Ninja Clowns layout
 //  (2 page large) with the page bit the other way round (it8_top inverts
 //  it), but, as every 6809 board, show column 0 at END BLANK (col_eb).
@@ -44,6 +55,9 @@ module it8_video
 	// Board registers
 	input             two_layer,      // Strata Bowling display (see above)
 	input             page8,          // Poker Dice display (see above)
+	input             gm,             // Grudge Match display (see above)
+	input       [7:0] gm_palctl,      // palette control (bit 7: load the palettes)
+	input       [7:0] gm_scroll,      // X scroll
 	input             col_eb,         // 2 page large: column 0 at END BLANK
 	input             page_sel,       // displayed page (bit 7 of 0x100180 write)
 	input       [7:0] grom_bank,
@@ -256,12 +270,65 @@ reg   [7:0] top_row;
 reg         top_next;             // the top layer's fetch is still to start
 reg         top_fill;             // line buffer writes go to the top buffer
 
+// gm: rows r and r + 1 of page 1, then of page 0, for the next line (gm_st
+// 1-4), then the palette rows of both pages for the line after (5-8). The
+// palette fetch runs at the start of every line, visible or not.
+wire [15:0] gm_po = {dispstart[9:0], 6'd0} | {8'd0, gm_scroll};
+reg   [3:0] gm_st;                // fetch now running (0 = none)
+reg   [7:0] gm_row, gm_prow;      // display row r, palette row
+reg   [7:0] gm_c0, gm_pc0;        // their start columns
+reg         gm_disp;              // the display rows are fetched too
+wire        gm_chunk_end = lb_we && lb_waddr == 5'd31;
+
+function [3:0] gm_next(input [3:0] st, input disp, input pal);
+	if (st == 4'd0)      gm_next = disp ? 4'd1 : pal ? 4'd5 : 4'd0;
+	else if (st == 4'd4) gm_next = pal ? 4'd5 : 4'd0;
+	else if (st == 4'd8) gm_next = 4'd0;
+	else                 gm_next = st + 4'd1;
+endfunction
+
+reg   [3:0] gm_nx;
+always @(*) gm_nx = gm_next(gm_st, gm_disp, gm_palctl[7]);
+reg         gm_kick;              // the clock after line_start
+always @(posedge clk) gm_kick <= gm && line_start;
+
 always @(posedge clk) begin
 	fetch_start <= 1'b0;
 	if (reset) begin
 		col_off  <= 8'd0;
 		top_next <= 1'b0;
 		top_fill <= 1'b0;
+		gm_st    <= 4'd0;
+	end
+	else if (gm) begin
+		top_next <= 1'b0;
+		top_fill <= 1'b0;
+		if (line_start) begin
+			gm_disp <= next_visible;
+			gm_row  <= gm_po[15:8] + next_y;
+			gm_prow <= gm_po[15:8];
+			gm_c0   <= gm_po[7:0];
+			gm_pc0  <= gm_po[7:0];
+			gm_st   <= 4'd0;
+		end
+		// start the first fetch the clock after line_start, each next one
+		// when the last chunk of the previous one is written
+		if ((gm_st == 4'd0 && gm_kick) || (gm_st != 4'd0 && gm_chunk_end)) begin
+			gm_st <= gm_nx;
+			if (gm_nx != 4'd0) begin
+				fetch_start <= 1'b1;
+				case (gm_nx)
+					4'd1: fetch_row <= {1'b1, gm_row};
+					4'd2: fetch_row <= {1'b1, gm_row + 8'd1};
+					4'd3: fetch_row <= {1'b0, gm_row};
+					4'd4: fetch_row <= {1'b0, gm_row + 8'd1};
+					4'd5: fetch_row <= {1'b0, gm_prow};
+					4'd6: fetch_row <= {1'b0, gm_prow + 8'd1};
+					4'd7: fetch_row <= {1'b1, gm_prow};
+					default: fetch_row <= {1'b1, gm_prow + 8'd1};
+				endcase
+			end
+		end
 	end
 	else if (line_start && next_visible) begin
 		fetch_start <= 1'b1;
@@ -276,6 +343,97 @@ always @(posedge clk) begin
 		fetch_row   <= {1'b0, top_row};
 		top_next    <= 1'b0;
 		top_fill    <= 1'b1;
+	end
+end
+
+// gm line buffers: two rows (64 chunks of 8 VRAM bytes) for each page.
+wire        gm_lb_we = gm && lb_we && gm_st != 4'd0 && gm_st <= 4'd4;
+wire  [5:0] gm_lb_wa = {~gm_st[0], lb_waddr};     // 1, 3: row r; 2, 4: row r + 1
+wire [63:0] gm_lb_wd;
+genvar gl;
+generate
+	for (gl = 0; gl < 8; gl = gl + 1) begin : gm_lane
+		assign gm_lb_wd[8*gl +: 8] = lb_wdata[16*gl+8 +: 8];
+	end
+endgenerate
+
+wire  [8:0] gm_col = (hcnt[8:0] - h_end_blank[8:0]) + {1'b0, gm_c0};
+wire [63:0] gm_bg_q, gm_fg_q;
+
+it8_sdpram #(.AW(6), .DW(64)) gm_bg_buf
+(
+	.clk     (clk),
+	.rd_addr (gm_col[8:3]),
+	.rd_data (gm_bg_q),
+	.wr_addr (gm_lb_wa),
+	.wr_data (gm_lb_wd),
+	.wr_en   (gm_lb_we & (gm_st == 4'd1 || gm_st == 4'd2))
+);
+
+it8_sdpram #(.AW(6), .DW(64)) gm_fg_buf
+(
+	.clk     (clk),
+	.rd_addr (gm_col[8:3]),
+	.rd_data (gm_fg_q),
+	.wr_addr (gm_lb_wa),
+	.wr_data (gm_lb_wd),
+	.wr_en   (gm_lb_we & (gm_st == 4'd3 || gm_st == 4'd4))
+);
+
+reg  [2:0] gm_lane_q;
+always @(posedge clk) gm_lane_q <= gm_col[2:0];
+wire [7:0] gm_fg_byte = gm_fg_q[8*gm_lane_q +: 8];
+wire [7:0] gm_bg_byte = gm_bg_q[8*gm_lane_q +: 8];
+wire [7:0] gm_pix     = pix_left ? {gm_fg_byte[7:4], gm_bg_byte[7:4]} : {gm_fg_byte[3:0], gm_bg_byte[3:0]};
+
+// gm palettes: the fetch of a palette row writes the bytes that fall in the
+// 32 from its start column into a staging copy; it becomes the palette at
+// the next line start. Entry e: byte 2e = R (bits 3-0), byte 2e + 1 = G, B.
+reg  [3:0] gm_sr [0:31];          // staging, index {page, entry}
+reg  [7:0] gm_sgb[0:31];
+reg  [3:0] gm_pr [0:31];          // palettes in use
+reg  [7:0] gm_pgb[0:31];
+reg        gm_staged;
+wire       gm_pal_we = gm && lb_we && gm_st >= 4'd5;
+wire       gm_pal_pg = (gm_st >= 4'd7);            // 5, 6: page 0; 7, 8: page 1
+wire       gm_pal_hi = ~gm_st[0];                  // 6, 8: row + 1
+wire [8:0] gm_kbase  = {gm_pal_hi, lb_waddr, 3'b000} - {1'b0, gm_pc0};
+wire [8:0] gm_k [0:7];                             // byte of lane l from the start column
+generate
+	for (gl = 0; gl < 8; gl = gl + 1) begin : gm_klane
+		assign gm_k[gl] = gm_kbase + gl;
+	end
+endgenerate
+integer    gp, ge;
+
+always @(posedge clk) begin
+	if (reset) gm_staged <= 1'b0;
+	else begin
+		if (gm_pal_we) begin
+			gm_staged <= 1'b1;
+			for (gp = 0; gp < 8; gp = gp + 1) begin
+				if (gm_k[gp] < 9'd32) begin
+					if (!gm_k[gp][0]) gm_sr [{gm_pal_pg, gm_k[gp][4:1]}] <= lb_wdata[16*gp+8 +: 4];
+					else              gm_sgb[{gm_pal_pg, gm_k[gp][4:1]}] <= lb_wdata[16*gp+8 +: 8];
+				end
+			end
+		end
+		if (line_start && gm_staged) begin
+			gm_staged <= 1'b0;
+			for (ge = 0; ge < 32; ge = ge + 1) begin
+				gm_pr [ge] <= gm_sr [ge];
+				gm_pgb[ge] <= gm_sgb[ge];
+			end
+		end
+	end
+end
+
+// Colour of a gm dot, one pix_ce after its value (as the RAMDAC's).
+reg [11:0] gm_rgb;
+always @(posedge clk) begin
+	if (pix_ce) begin
+		if (gm_pix[7:4] != 4'h0) gm_rgb <= {gm_pr[{1'b0, gm_pix[7:4]}], gm_pgb[{1'b0, gm_pix[7:4]}]};
+		else                     gm_rgb <= {gm_pr[{1'b1, gm_pix[3:0]}], gm_pgb[{1'b1, gm_pix[3:0]}]};
 	end
 end
 
@@ -363,6 +521,11 @@ always @(posedge clk) begin
 		hblank <= s1_hb;
 		vblank <= s1_vb;
 		if (s1_hb || s1_vb || !s1_on) {r, g, b} <= 24'd0;
+		else if (gm) begin
+			r <= {gm_rgb[11:8], gm_rgb[11:8]};
+			g <= {gm_rgb[7:4],  gm_rgb[7:4]};
+			b <= {gm_rgb[3:0],  gm_rgb[3:0]};
+		end
 		else begin
 			r <= {rgb6[17:12], rgb6[17:16]};
 			g <= {rgb6[11:6],  rgb6[11:10]};
