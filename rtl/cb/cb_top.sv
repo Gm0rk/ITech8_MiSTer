@@ -15,7 +15,8 @@
 //    4000        W    row latch (TMS34061 direct access row)
 //    4800        W    Capcom/Coors: graphics ROM bank
 //    5000-57FF   RW   battery-backed RAM
-//    5800-5FFF   RW   TMS34061 (A9:8 function, A7:0 column)
+//    5800-5FFF   RW   TMS34061 (A9:8 function, A7:0 column); writes to
+//                     5C00-5FFF are ignored (D-034)
 //    6000        W    sound command
 //    6800        W    trackball counter reset (and watchdog)
 //    7000        R    trackball V nibble, P2 hooks, cabinet, coin 2
@@ -57,6 +58,8 @@ module cb_top
 	// Controls (active high). track_x/track_y are free-running counters.
 	input       [7:0] track_x,
 	input       [7:0] track_y,
+	output      [7:0] track_dx,       // the counters minus the game's last reset
+	output      [7:0] track_dy,       //   (cb_trackball holds them within 7)
 	input             p1_hook_l,
 	input             p1_hook_r,
 	input             p2_hook_l,
@@ -213,7 +216,11 @@ wire sel_grom  = !bowlrama && (addr[15:14] == 2'b00);
 wire sel_row   = (addr == 16'h4000);
 wire sel_bank  = !bowlrama && (addr == 16'h4800);
 wire sel_nv    = (addr[15:11] == 5'b01010);          // 5000-57FF
-wire sel_tms   = (addr[15:11] == 5'b01011);          // 5800-5FFF
+// The games use only 5800-5BFF (their screen clear stops at 5C00). Coors
+// Light's setup menu, asked to lower a setting below its minimum, prints off
+// the end of that window into the TMS34061's sync registers and the picture
+// is lost; those writes are dropped (D-034). Reads still mirror.
+wire sel_tms   = (addr[15:11] == 5'b01011) && !(addr[10] && !rnw);   // 5800-5FFF
 wire sel_snd   = (addr == 16'h6000);
 wire sel_track = (addr == 16'h6800);
 wire sel_in0   = (addr == 16'h7000);
@@ -331,6 +338,8 @@ cb_sound sound
 reg  [7:0] last_x, last_y;
 wire [3:0] dx = track_x[3:0] - last_x[3:0];
 wire [3:0] dy = track_y[3:0] - last_y[3:0];
+assign track_dx = track_x - last_x;
+assign track_dy = track_y - last_y;
 wire [7:0] in0 = {~coin2, ~cocktail, ~p2_hook_r, ~p2_hook_l, dy};
 wire [7:0] in1 = {~coin1, ~start,    ~p1_hook_r, ~p1_hook_l, dx};
 
