@@ -8,7 +8,8 @@
 //  counts, and the gain is chosen that puts the median a little past the
 //  most the game uses. In the bowling games three sideways rolls follow,
 //  and a sideways gain is chosen that carries the ball about half the lane
-//  with the median roll. Both are written to the OSD through hps_io's
+//  with the median roll, never below the forward gain. Both are written to
+//  the OSD through hps_io's
 //  status_set, into the trackball preset the top level names (preset), and
 //  cb_trackball uses that preset's gains for the mouse.
 //
@@ -29,8 +30,15 @@
 //  A throw starts with the first forward or back movement and ends after
 //  half a second without any; its result is the best window of its forward
 //  (Y) counts. A sideways roll starts with the first sideways movement and
-//  ends the same way; its result is its sideways (X) total. Under 8 counts
-//  it is too slow and is asked again. Nothing is written until the end:
+//  ends the same way; its result is the most its sideways (X) counts add up
+//  to in any half second (30 frames) of it (D-051: build 024 took the whole
+//  roll, so a roll that went on, or a small ball spun round more than once,
+//  measured thousands of counts and set a gain far too low). One deliberate
+//  roll fits in half a second, so for it nothing changes. Under 8 counts
+//  it is too slow and is asked again. The sideways gain found is raised to
+//  the forward gain if it is below it: the bowling games already take the
+//  sideways counts at half the rate or less, and a lower gain there is
+//  never what a player wants. Nothing is written until the end:
 //  cancel (OSD Cancel calibration), or 30 seconds (IDLE_FRAMES) waiting
 //  for a throw or roll, ends it with the gains unchanged.
 //
@@ -232,6 +240,21 @@ function [19:0] sx(input [15:0] v);
 	sx = {{4{v[15]}}, v};
 endfunction
 
+// Sideways counts of the last 30 frames, newest first; hx_out is the one
+// that just left (31 frames ago), for the roll's half-second window below.
+reg  [15:0] hxs [0:29];
+reg  [15:0] hx_out = 16'd0;
+integer     hxi;
+initial for (hxi = 0; hxi < 30; hxi = hxi + 1) hxs[hxi] = 16'd0;
+
+always @(posedge clk) begin
+	if (frame) begin
+		hx_out <= hxs[29];
+		for (hxi = 29; hxi > 0; hxi = hxi - 1) hxs[hxi] <= hxs[hxi - 1];
+		hxs[0] <= xacc;
+	end
+end
+
 wire [19:0] sum2 = sx(h0) + sx(h1);
 wire [19:0] sum4 = sum2 + sx(h2) + sx(h3);
 wire [19:0] sum8 = sum4 + sx(h4) + sx(h5) + sx(h6) + sx(h7);
@@ -252,7 +275,8 @@ reg   [2:0] st = S_IDLE;
 reg         ph = 1'b0;
 reg   [1:0] k = 2'd0;
 reg  [15:0] best = 16'd0;
-reg  [19:0] xsum = 20'd0;
+reg  [19:0] xsum = 20'd0;             // the roll's sideways counts in its last half second
+reg   [4:0] rf = 5'd0;                 // frames of the roll so far, up to 30
 reg  [15:0] r1 = 16'd0, r2 = 16'd0, r3 = 16'd0, s1 = 16'd0, s2 = 16'd0, s3 = 16'd0, med = 16'd0;
 reg   [4:0] quiet = 5'd0;
 reg  [10:0] idle = 11'd0;              // frames waiting
@@ -271,7 +295,10 @@ function [15:0] median3(input [15:0] a, input [15:0] b, input [15:0] c);
 	end
 endfunction
 
-wire [19:0] xmag  = xsum[19] ? 20'd0 - xsum : xsum;
+// The window after this frame: add the newest frame, drop the one 30
+// frames back if it belongs to the roll.
+wire [19:0] xwin  = xsum + sx(hx0) - ((rf == 5'd30) ? sx(hx_out) : 20'd0);
+wire [19:0] xmag  = xwin[19] ? 20'd0 - xwin : xwin;
 wire [15:0] xmagc = (xmag[19:16] != 4'd0) ? 16'hFFFF : xmag[15:0];
 
 wire [31:0] prod = {16'd0, med} * {21'd0, gain_of(n)};
@@ -321,6 +348,7 @@ always @(posedge clk) begin
 			if (moved) begin
 				best  <= ph ? ((hx0[15] ? 16'd0 - hx0 : hx0)) : winp;
 				xsum  <= sx(hx0);
+				rf    <= 5'd1;
 				quiet <= 5'd0;
 				msg_b <= m_prompt;
 				st    <= S_MOVE;
@@ -336,8 +364,9 @@ always @(posedge clk) begin
 		S_MOVE: if (fr_d) begin
 			idle <= 11'd0;
 			if (ph) begin
-				xsum <= xsum + sx(hx0);
-				best <= xmagc;
+				xsum <= xwin;
+				rf   <= (rf == 5'd30) ? 5'd30 : rf + 5'd1;
+				if (xmagc > best) best <= xmagc;
 			end
 			else if (winp > best) best <= winp;
 			if (moved) quiet <= 5'd0;
@@ -404,7 +433,8 @@ always @(posedge clk) begin
 					end
 				end
 				else begin
-					gain_x_n <= (err < ebest) ? n : nbest;
+					// never below the forward gain (see above)
+					gain_x_n <= (((err < ebest) ? n : nbest) < gain_n) ? gain_n : ((err < ebest) ? n : nbest);
 					wr       <= 1'b1;
 					done     <= 1'b1;
 					msg_b    <= M_DONE;
@@ -463,7 +493,7 @@ localparam [8*24*12-1:0] MSGS = {
 	"SWING AS HARD AS IN PLAY",
 	"TOO SLOW  TRY AGAIN     ",
 	"DONE  GAINS SET         ",
-	"ROLL SIDEWAYS AS IN PLAY",
+	"ONE ROLL SIDEWAYS TO AIM",
 	"CANCELLED  NOTHING SET  ",
 	"NO MOVEMENT  CANCELLED  "
 };
