@@ -19,6 +19,12 @@ Match**.
 > program ROMs.  This is disclosed here
 > so you can make your decision to use this core accordingly.
 
+Add to your downloader.ini
+```
+[Gm0rk/Gm0rkCores]
+db_url = https://raw.githubusercontent.com/Gm0rk/Gm0rkCores/db/db.json.zip
+```
+
 ## Games
 
 <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/itech8_Gameplay.png" width="800">
