@@ -1,5 +1,8 @@
 # JT03 (YM2203) by Jose Tejada (jotego), https://github.com/jotego/jt12 (dc9be7c), with JT49 (7f6abfd).
 # File list from jt12/target/quartus/jt03.qip and jt49/syn/quartus/jt49.qip.
+# Also the FM part of the YM2608 (rtl/sound/it8_ym2608.sv). Local changes, marked
+# "ITech8 MiSTer": jt12_top.v (six-channel slot order of the mono accumulator,
+# latch_per_part) and jt12_mmr.v (latch_per_part), D-048.
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) hdl/jt03.v ]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) hdl/jt12.v ]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) hdl/jt12_top.v ]
