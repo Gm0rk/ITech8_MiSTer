@@ -23,6 +23,8 @@
 //  any player's Service is the service switch.
 //    1  Wheel Of Fortune   Button, Coin, Service (players 1-3: Red, Yellow,
 //                          Blue); the dial on blitter register 13
+//    2  Grudge Match       Button 1, Button 2, Start, Coin, Service (two
+//                          players)
 //    3  Poker Dice         Play, Raise, Upper Left, Upper Right, Middle,
 //                          Lower Left, Lower Right, Coin, Service
 //    4  Hot Shots Tennis   Hard, Soft, Coin, Service (two players)
@@ -34,7 +36,6 @@
 //    9  Rim Rockin'        Shoot, Pass, Start, Coin, Service (players 1-4;
 //       Basketball         player n's Coin is coin n; any player's Service,
 //                          or OSD Service Mode, the service menu switch)
-//  (2 is kept for Grudge Match.)
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -89,6 +90,7 @@ always @(*) begin
 		4'd1, 4'd6, 4'd7: begin coin_b = 4'd5;  svc_b = 4'd6;  end
 		4'd3, 4'd8:       begin coin_b = 4'd11; svc_b = 4'd12; end
 		4'd4:             begin coin_b = 4'd6;  svc_b = 4'd7;  end
+		4'd2:             begin coin_b = 4'd7;  svc_b = 4'd8;  end
 		4'd5:             begin coin_b = 4'd9;  svc_b = 4'd10; end
 		default:          begin coin_b = 4'd15; svc_b = 4'd15; end
 	endcase
@@ -126,6 +128,16 @@ always @(*) begin
 			in40 = {~svc, 2'b11, 1'b1, 1'b1, 2'b11, special};
 			in60 = {~c1, ~j0[4], ~`UP(j0), ~`DOWN(j0), ~`LEFT(j0), ~`RIGHT(j0), ~j0[5], 1'b1};
 			in80 = {~c2, ~j1[4], ~`UP(j1), ~`DOWN(j1), ~`LEFT(j1), ~`RIGHT(j1), ~j1[5], 1'b1};
+		end
+
+		// Grudge Match (MAME grmatch): port 40 bit 3 Adjustments Lockout
+		// (off), 4 Coinage (1 coin 1 credit), 5 Difficulty ("1"); port 60
+		// player 1, port 80 player 2: bit 0 Button 2, 1 Button 1, 2 right,
+		// 3 left, 4 down, 5 up, 6 Start, 7 the coin.
+		4'd2: begin
+			in40 = {~svc, 1'b1, 1'b1, 1'b1, 1'b1, 2'b11, special};
+			in60 = {~c1, ~j0[6], ~`UP(j0), ~`DOWN(j0), ~`LEFT(j0), ~`RIGHT(j0), ~j0[4], ~j0[5]};
+			in80 = {~c2, ~j1[6], ~`UP(j1), ~`DOWN(j1), ~`LEFT(j1), ~`RIGHT(j1), ~j1[4], ~j1[5]};
 		end
 
 		// Arlington Horse Racing (MAME arlingtn): port 40 bit 3 a switch
