@@ -80,6 +80,7 @@ parameter FULLFM=0;
 parameter JT49_DIV=2,
           YM2203_LUMPED=0;
 parameter mask_div=1;
+parameter latch_per_part=0;   // ITech8 MiSTer: see jt12_mmr
 
 wire flag_A, flag_B, busy;
 
@@ -301,7 +302,7 @@ jt12_dout #(.use_ssg(use_ssg),.use_adpcm(use_adpcm)) u_dout(
     .dout           ( dout          )
 );
 
-jt12_mmr #(.use_ssg(use_ssg),.num_ch(num_ch),.use_pcm(use_pcm), .use_adpcm(use_adpcm), .mask_div(mask_div))
+jt12_mmr #(.use_ssg(use_ssg),.num_ch(num_ch),.use_pcm(use_pcm), .use_adpcm(use_adpcm), .mask_div(mask_div), .latch_per_part(latch_per_part))
     u_mmr(
     .rst        ( rst       ),
     .clk        ( clk       ),
@@ -677,10 +678,13 @@ generate
             .op_result  ( op_result_hd ),
             // note that the order changes to deal
             // with the operator pipeline delay
-            .s1_enters  ( s1_enters ),
-            .s2_enters  ( s2_enters ),
-            .s3_enters  ( s3_enters ),
-            .s4_enters  ( s4_enters ),
+            // ITech8 MiSTer (Gm0rk, 2026): with six channels (YM2608) the
+            // pipeline is the YM2612/YM2610 one, so the slots are swapped
+            // as for jt12_acc and jt10_acc; three channels (YM2203) as before
+            .s1_enters  ( num_ch==6 ? s2_enters : s1_enters ),
+            .s2_enters  ( num_ch==6 ? s1_enters : s2_enters ),
+            .s3_enters  ( num_ch==6 ? s4_enters : s3_enters ),
+            .s4_enters  ( num_ch==6 ? s3_enters : s4_enters ),
             .alg        ( alg_I     ),
             .zero       ( zero      ),
             // combined output
