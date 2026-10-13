@@ -44,6 +44,10 @@
 //  the ports above, others a game's own from the raw joysticks j0r-j3r).
 //  rr (build 026) is Rim Rockin' Basketball's board: it8_main09 at 3 MHz
 //  with its bank register, 128 KB program and ports 161-165.
+//  Build 027 adds Grudge Match (MAME grmatch): snd_mode 3, the YM2608 sound
+//  board; disp_mode 3, two 4-bit layers coloured by two TMS34070 palettes
+//  that the hardware loads from video RAM, with a horizontal scroll
+//  (it8_main09 writes 0160 and 0180, ignores the RAMDAC); in_layout 2.
 //
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
@@ -468,7 +472,7 @@ wire        m9_dac_we, m9_snd_we;
 wire [11:0] m9_tms_offs;
 wire  [3:0] m9_blt_idx;
 wire  [1:0] m9_dac_idx;
-wire  [7:0] m9_wdata, m9_grom_bank, m9_page;
+wire  [7:0] m9_wdata, m9_grom_bank, m9_page, m9_palctl, m9_xscroll;
 wire [31:0] m9_an;
 wire        tms_irq, special;
 wire [15:0] m9_pc, m9_frames, m9_nmi, m9_firq, m9_waits;
@@ -491,6 +495,9 @@ it8_video video
 	.pix_left      (m9_dots6 | pix_left),
 	.two_layer     (cpu09 & (disp_mode == 2'd0)),
 	.page8         (cpu09 & (disp_mode == 2'd2)),
+	.gm            (cpu09 & (disp_mode == 2'd3)),
+	.gm_palctl     (m9_palctl),
+	.gm_scroll     (m9_xscroll),
 	.col_eb        (cpu09),
 	.page_sel      (cpu09 ? m9_page[7] ^ (disp_mode == 2'd1) : page_sel),
 	.grom_bank     (cpu09 ? m9_grom_bank : grom_bank),
@@ -586,6 +593,7 @@ it8_main09 main09
 	.map_gtg2     (gtg2),
 	.map_lo       (map_lo),
 	.rr           (rr),
+	.gm           (disp_mode == 2'd3),
 	.tb_horiz     (tb_horiz),
 	.dial_mode    (dial_mode),
 	.in40         (in40_09),
@@ -616,6 +624,8 @@ it8_main09 main09
 	.wdata        (m9_wdata),
 	.grom_bank    (m9_grom_bank),
 	.page         (m9_page),
+	.palctl       (m9_palctl),
+	.xscroll      (m9_xscroll),
 	.an           (m9_an),
 	.nv_addr      (m9_nv_addr),
 	.nv_din       (m9_nv_din),
@@ -645,6 +655,7 @@ it8_sound sound
 	.oki_cen      (oki_cen),
 	.ym2203       (cpu09 & ~gtg2 & (snd_mode == 2'd0)),
 	.pia_brd      (cpu09 & (snd_mode == 2'd1)),
+	.ym2608       (cpu09 & (snd_mode == 2'd3)),
 	.cmd_we       (cpu09 ? m9_snd_we : snd_we),
 	.cmd          (cpu09 ? snd09     : dev_wdata),
 	.rom_we       (snd_rom_we),
