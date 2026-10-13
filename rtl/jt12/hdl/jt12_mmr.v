@@ -127,6 +127,10 @@ module jt12_mmr(
 );
 
 parameter use_ssg=0, num_ch=6, use_pcm=1, use_adpcm=0, mask_div=1;
+// ITech8 MiSTer (Gm0rk, 2026): latch_per_part=1 keeps the upper frequency
+// latch per port and a separate one for the CH3 registers, as ymfm models
+// the YM2608 (MAME); 0 is JT12's single latch, unchanged.
+parameter latch_per_part=0;
 
 jt12_div #(.use_ssg(use_ssg)) u_div (
     .rst            ( rst             ),
@@ -175,6 +179,7 @@ reg csm, effect;
 reg [ 2:0] block_ch3op2,  block_ch3op3,  block_ch3op1;
 reg [10:0] fnum_ch3op2, fnum_ch3op3, fnum_ch3op1;
 reg [ 5:0] latch_fnum;
+reg [ 5:0] latch_pa, latch_pb, latch_c3;   // latch_per_part
 
 
 reg [2:0] up_ch;
@@ -262,6 +267,9 @@ always @(posedge clk) begin : memory_mapped_registers
         { block_ch3op3, fnum_ch3op3 } <= {3'd0, 11'd0 };
         { block_ch3op2, fnum_ch3op2 } <= {3'd0, 11'd0 };
         latch_fnum <= 0;
+        latch_pa   <= 0;
+        latch_pb   <= 0;
+        latch_c3   <= 0;
         op_din     <= 0;
         part       <= 0;
     end else begin
@@ -318,6 +326,7 @@ always @(posedge clk) begin : memory_mapped_registers
                 end
 
                 // CH3 special registers
+                if( latch_per_part==0 ) begin
                 casez( selected_register)
                     8'hA9: { block_ch3op1, fnum_ch3op1 } <= { latch_fnum, din };
                     8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_fnum, din };
@@ -327,6 +336,20 @@ always @(posedge clk) begin : memory_mapped_registers
                     8'hA4, 8'hA5, 8'hA6, 8'hAD, 8'hAC, 8'hAE: latch_fnum <= din[5:0];
                     default:;   // avoid incomplete-case warning
                 endcase
+                end else begin
+                // ITech8 MiSTer: one latch per port, one for the CH3
+                // registers; latch_fnum carries the port's to the A0-A2
+                // write it belongs to
+                casez( selected_register)
+                    8'hA9: if(!part) { block_ch3op1, fnum_ch3op1 } <= { latch_c3, din };
+                    8'hA8: if(!part) { block_ch3op3, fnum_ch3op3 } <= { latch_c3, din };
+                    8'hAA: if(!part) { block_ch3op2, fnum_ch3op2 } <= { latch_c3, din };
+                    8'hA4, 8'hA5, 8'hA6: if(part) latch_pb <= din[5:0]; else latch_pa <= din[5:0];
+                    8'hAC, 8'hAD, 8'hAE: if(!part) latch_c3 <= din[5:0];
+                    8'hA0, 8'hA1, 8'hA2: latch_fnum <= part ? latch_pb : latch_pa;
+                    default:;
+                endcase
+                end
 
                 // YM2612 PCM support
                 if( use_pcm==1 ) begin
