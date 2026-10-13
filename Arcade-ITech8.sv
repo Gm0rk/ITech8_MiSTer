@@ -124,7 +124,7 @@ localparam CONF_STR = {
 	"H1P1O[78:74],CRT V-Shift,", CRT_S5, ";",
 	"-;",
 	"H2O[8:7],Audio,FM + PCM,FM only,PCM only;",
-	"H3O[18:17],Orientation,Horizontal,Vertical,Vertical Flip;",
+	"H3O[18:17],Orientation,Horizontal,Vertical,Vertical Flip,Horizontal Flip;",
 	CONF_TB,
 	// The board's service switch: on opens the game's service menu.
 	"O[9],Service Mode,Off,On;",
@@ -174,9 +174,10 @@ wire         video_rotated;
 // MRA sends no index 1. An optional second byte carries more 6809 layout
 // bits: bit 0 MAME's common_lo_map (TMS34061 at 0000, I/O at 1100; Golden
 // Tee Golf II joystick); bits 2-1 the display (0 two layers, 1 2 page large
-// at 8 MHz, 2 one 8-bit page); bits 4-3 the sound board (0 as bit 5 of the
-// first byte says, 1 the YM3812 board with a PIA, 2 the YM3812 board with a
-// VIA); bit 5 Rim Rockin' Basketball's board (3 MHz CPU, bank register at
+// at 8 MHz, 2 one 8-bit page, 3 Grudge Match's two 4-bit layers with
+// TMS34070 palettes, at 8 MHz; D-048); bits 4-3 the sound board (0 as bit 5
+// of the first byte says, 1 the YM3812 board with a PIA, 2 the YM3812 board
+// with a VIA, 3 Grudge Match's YM2608 board); bit 5 Rim Rockin' Basketball's board (3 MHz CPU, bank register at
 // 01A0, 128 KB program, ports 161-165; D-047); bit 6 the NVRAM starts
 // as 00, not FF; bit 7 the game is vertical the other way (MAME ROT90). A third byte is the input layout
 // (it8_ports09.sv; 0 the ports of the games before build 020). Both are
@@ -200,10 +201,11 @@ wire   [1:0] snd_mode  = is_m09 ? board_byte2[4:3] : 2'd0;
 wire   [3:0] in_layout = is_m09 ? board_byte3[3:0] : 4'd0;
 wire         has_dial  = (in_layout == 4'd1) || (in_layout == 4'd7);   // it8_main09
 wire         nv_fill00 = is_br | (is_m09 & board_byte2[6]);           // NVRAM starts 00
-// 6 MHz dots: the 6809 games but those in 2 page large (8 MHz, as Ninja
-// Clowns and the bowling board).
+// 6 MHz dots: the 6809 games but those in 2 page large and Grudge Match
+// (8 MHz, as Ninja Clowns and the bowling board).
 wire         dot6      = is_m09 & ~disp_mode[0];
 wire         flip180 = is_vert & (status[18:17] == 2'd2);   // OSD Orientation "Vertical Flip"
+wire         hflip   = is_vert & (status[18:17] == 2'd3);   // OSD Orientation "Horizontal Flip"
 wire   [1:0] tb_preset = has_tb ? status[22:21] : 2'd0;           // OSD Trackball Options Preset
 
 // Declared here because hps_io and the loader use them before the board.
@@ -496,6 +498,7 @@ wire [7:0] p2 = {j1[4], j1[5], j1[0], j1[1], j1[2], j1[3], j1[7], j1[6]};
 // Trackball (bowling and golf games) or dial: the mouse, or the stick.
 wire [7:0] track_x, track_y;
 wire [15:0] track_drop_x, track_drop_y;      // the Controls page's DROP
+wire [7:0] cb_track_dx, cb_track_dy;         // bowling board: counts the game has not read yet
 
 cb_trackball trackball
 (
@@ -511,6 +514,9 @@ cb_trackball trackball
 	.gain_x    (tb_gain_x),
 	.side      (tb_side),
 	.per_frame (is_m09),
+	.win_en    (is_cb),                       // the 4-bit reads of the bowling board (D-049)
+	.win_dx    (cb_track_dx),
+	.win_dy    (cb_track_dy),
 	.x         (track_x),
 	.y         (track_y),
 	.drop_x    (track_drop_x),
@@ -644,6 +650,8 @@ cb_top cb_board
 	.wide         (1'b0),
 	.track_x      (track_x),
 	.track_y      (track_y),
+	.track_dx     (cb_track_dx),
+	.track_dy     (cb_track_dy),
 	.p1_hook_l    (j0[4]),
 	.p1_hook_r    (j0[5]),
 	.p2_hook_l    (j1[4]),
@@ -736,11 +744,12 @@ end
 // turned to read upright with the game: cp_rot is how the viewer sees the
 // raster, turned anticlockwise for MAME ROT270 (as screen_rotate, or a
 // monitor on its side), clockwise for ROT90, and the other way after
-// Vertical Flip, which turns the picture under the overlay.
+// Vertical Flip, which turns the picture under the overlay, or with
+// Horizontal Flip, where screen_rotate turns it the other way.
 reg        cp_vb_d = 1'b0;
 always @(posedge clk_sys) if (ce_pix) cp_vb_d <= core_vb;
 wire       cp_frame = ce_pix & core_vb & ~cp_vb_d;
-wire [1:0] cp_rot   = ~is_vert ? 2'd0 : (~rot90 ^ flip180) ? 2'd1 : 2'd2;
+wire [1:0] cp_rot   = ~is_vert ? 2'd0 : (~rot90 ^ flip180 ^ hflip) ? 2'd1 : 2'd2;
 
 ///////////////////////   TRACKBALL PRESETS   //////////////////////
 
@@ -1054,7 +1063,8 @@ arcade_video #(.WIDTH(416), .DW(24)) arcade_video
 // its read rate assumes the native 15 kHz pixel clock. 12 clk_vid clocks per
 // pixel = 48 quarter cycles (8 MHz dots); each H-Size step is 1/48 (about
 // 2%). The 6809 board's 6 MHz dots (dot6: every 6809 game but the 2 page
-// large ones, which run at 8 MHz) are 16 clocks, 64 quarter cycles.
+// large ones and Grudge Match, which run at 8 MHz) are 16 clocks, 64
+// quarter cycles.
 
 wire scandoubled = (status[5:3] != 3'd0) | forced_scandoubler;
 
@@ -1261,9 +1271,12 @@ wire [1:0] ar = status[122:121];
 // screen; the ROT90 games (Hot Shots Tennis, Peggle, Poker Dice) clockwise.
 // Orientation "Vertical" leaves it as the board makes it, for a rotated
 // monitor; "Vertical Flip" turns it 180 degrees through it8_flip180 (on
-// every output), for a monitor rotated the other way. Ninja Clowns is never
-// rotated; a 6809 game is when its board bytes say it is vertical.
-wire no_rotate = ~is_vert | (status[18:17] != 2'd0);
+// every output), for a monitor rotated the other way; "Horizontal Flip"
+// has screen_rotate turn it the other way round (D-050), for a horizontal
+// screen with the game's top on the other side (the analog output stays
+// the board's own, as with Horizontal). Ninja Clowns is never rotated; a
+// 6809 game is when its board bytes say it is vertical.
+wire no_rotate = ~is_vert | (status[18:17] == 2'd1) | (status[18:17] == 2'd2);
 
 wire        sr_we, sr_rd;
 wire  [7:0] sr_burstcnt, sr_be;
@@ -1280,7 +1293,7 @@ screen_rotate screen_rotate
 	.VGA_HS         (av_hs),
 	.VGA_VS         (av_vs),
 	.VGA_DE         (av_de),
-	.rotate_ccw     (~rot90),
+	.rotate_ccw     (~rot90 ^ hflip),
 	.no_rotate      (no_rotate),
 	.flip           (1'b0),
 	.video_rotated  (video_rotated),
