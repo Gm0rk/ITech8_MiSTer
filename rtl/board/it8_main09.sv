@@ -54,6 +54,12 @@
 //  million traced in MAME, D-047), where the 6309 takes the 6809's cycles,
 //  so mc6809is runs it on a 16-clock E cycle.
 //
+//  gm selects Grudge Match's board (MAME grmatch_map, D-048): the layout
+//  above, but a write to 0160 sets the palette control (palctl, bit 7: the
+//  TMS34070s load their palettes) instead of the display page, a write to
+//  0180 the X scroll (xscroll) instead of the colour latch, and writes to
+//  01E0-01FF go nowhere (no RAMDAC).
+//
 //  tb_horiz gives the trackball the horizontal games' axes (MAME gtgt:
 //  register 12 is X, right positive; 13 is Y, up positive); without it the
 //  vertical games' (stratab: 12 is Y and 13 X, counting down for up and
@@ -88,6 +94,7 @@ module it8_main09
 	input             map_gtg2,       // Golden Par Golf's I/O layout (above)
 	input             map_lo,         // TMS34061 at 0000, I/O at 1100 (above)
 	input             rr,             // Rim Rockin' Basketball's board (above)
+	input             gm,             // Grudge Match's board (above)
 	input             tb_horiz,       // trackball axes of a horizontal game
 	input       [1:0] dial_mode,      // spinner on register 13 (above)
 
@@ -124,6 +131,8 @@ module it8_main09
 	output      [7:0] wdata,          // CPU data for every write above
 	output reg  [7:0] grom_bank,
 	output reg  [7:0] page,
+	output reg  [7:0] palctl,         // gm: palette control (0160)
+	output reg  [7:0] xscroll,        // gm: X scroll (0180)
 	output     [31:0] an,             // blitter registers 12-15 {15, 14, 13, 12}
 
 	// Battery-backed RAM (it8_nvram: 16-bit, byte lanes, even byte upper)
@@ -291,6 +300,8 @@ always @(posedge clk) begin
 		bank2     <= 2'd0;
 		grom_bank <= 8'h00;
 		page      <= 8'hC0;           // MAME video_start
+		palctl    <= 8'h00;
+		xscroll   <= 8'h00;
 		ref_x     <= track_x;
 		ref_y     <= track_y;
 		cpu_din   <= 8'h00;
@@ -325,8 +336,10 @@ always @(posedge clk) begin
 				if (sel_snd)   snd_we    <= 1'b1;
 				if (sel_bnk2)  bank2     <= cpu_dout[1:0];
 				if (sel_grom)  grom_bank <= cpu_dout;
-				if (sel_page)  page      <= cpu_dout;
-				if (sel_latch) latch_we  <= 1'b1;
+				if (sel_page && !gm)  page      <= cpu_dout;
+				if (sel_page &&  gm)  palctl    <= cpu_dout;
+				if (sel_latch && !gm) latch_we  <= 1'b1;
+				if (sel_latch &&  gm) xscroll   <= cpu_dout;
 				if (sel_blt) begin
 					blt_idx <= addr[4:1];
 					blt_we  <= 1'b1;
@@ -336,7 +349,7 @@ always @(posedge clk) begin
 						ref_y <= track_y;
 					end
 				end
-				if (sel_dac && addr[4:3] == 2'b00) begin
+				if (sel_dac && addr[4:3] == 2'b00 && !gm) begin
 					dac_idx <= addr[2:1];
 					dac_we  <= 1'b1;
 				end
