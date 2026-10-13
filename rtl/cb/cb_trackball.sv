@@ -5,8 +5,14 @@
 //  The game reads a 4-bit count difference four times a frame (7000/7800,
 //  reset at 6800), so the counters must not move more than 7 between two
 //  reads or the difference wraps into the wrong direction. Mouse movement is
-//  therefore collected and paid out at most one count per 0.6 ms per axis
-//  (at most 7 per read), which is the fastest movement the game can see.
+//  therefore collected and paid out at most one count per 0.6 ms per axis.
+//  The reads are not evenly spaced, though: one gap a frame is 5.2 ms (three
+//  of 3.8 ms in the core, 4.1 in MAME, and up to 6.6 ms now and then), long
+//  enough for 8 or 9 counts at that rate, which the game took as a move the
+//  other way. So with win_en (the bowling board) a count is also held back
+//  while the difference the game will read (win_dx, win_dy: the counters
+//  minus their values at the game's last reset, from cb_top) is already 7
+//  that way; it is paid out after the next reset (D-049).
 //  At most one frame's worth (28 counts, 17 ms) is kept waiting: anything
 //  beyond is dropped, so the ball stops within a frame of the mouse instead
 //  of playing out a backlog for up to 0.6 s, while a mouse that reports only
@@ -58,6 +64,9 @@ module cb_trackball
 	input     [10:0] gain_x,          // 0: gain and side; else X's own gain, as gain
 	input      [1:0] side,            // sideways multiplier - 1 (0: x1 .. 3: x4)
 	input            per_frame,       // Strata Bowling pacing (see above)
+	input            win_en,          // hold counts at 7 since the game's reset
+	input      [7:0] win_dx,          // counters minus the game's last reset
+	input      [7:0] win_dy,
 	output reg [7:0] x,
 	output reg [7:0] y,
 	output    [15:0] drop_x,
@@ -104,6 +113,12 @@ wire signed [22:0] lim = per_frame ? 23'sd25600 : 23'sd7168;
 wire signed [22:0] sum_x = {{7{acc_x[15]}}, acc_x} + gx;
 wire signed [22:0] sum_y = {{7{acc_y[15]}}, acc_y} + gy;
 
+// Room left in the game's 4-bit read, each way (win_en).
+wire up_x = !win_en || ($signed(win_dx) <  8'sd7);
+wire dn_x = !win_en || ($signed(win_dx) > -8'sd7);
+wire up_y = !win_en || ($signed(win_dy) <  8'sd7);
+wire dn_y = !win_en || ($signed(win_dy) > -8'sd7);
+
 function signed [15:0] clamp(input signed [22:0] v, input signed [22:0] l);
 	clamp = (v > l) ? l[15:0] : (v < -l) ? -l[15:0] : v[15:0];
 endfunction
@@ -136,17 +151,17 @@ always @(posedge clk) begin
 			drop_yf <= drop_yf + excess(sum_y, lim);
 		end
 		else if (pace == 16'd0) begin
-			if (acc_x >= 16'sd256)       begin x <= x + 8'd1; acc_x <= acc_x - 16'sd256; end
-			else if (acc_x <= -16'sd256) begin x <= x - 8'd1; acc_x <= acc_x + 16'sd256; end
-			if (acc_y >= 16'sd256)       begin y <= y + 8'd1; acc_y <= acc_y - 16'sd256; end
-			else if (acc_y <= -16'sd256) begin y <= y - 8'd1; acc_y <= acc_y + 16'sd256; end
+			if (acc_x >= 16'sd256 && up_x)       begin x <= x + 8'd1; acc_x <= acc_x - 16'sd256; end
+			else if (acc_x <= -16'sd256 && dn_x) begin x <= x - 8'd1; acc_x <= acc_x + 16'sd256; end
+			if (acc_y >= 16'sd256 && up_y)       begin y <= y + 8'd1; acc_y <= acc_y - 16'sd256; end
+			else if (acc_y <= -16'sd256 && dn_y) begin y <= y - 8'd1; acc_y <= acc_y + 16'sd256; end
 		end
 
 		if (jcnt == 18'd0) begin
-			if (right && !left) x <= x + 8'd1;
-			if (left && !right) x <= x - 8'd1;
-			if (up && !down)    y <= y + 8'd1;
-			if (down && !up)    y <= y - 8'd1;
+			if (right && !left && up_x) x <= x + 8'd1;
+			if (left && !right && dn_x) x <= x - 8'd1;
+			if (up && !down && up_y)    y <= y + 8'd1;
+			if (down && !up && dn_y)    y <= y - 8'd1;
 		end
 	end
 end
