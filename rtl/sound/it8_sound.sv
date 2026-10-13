@@ -27,6 +27,18 @@
 //  place of the VIA, FIRQ from the YM3812 only, and the PIA's port B bit 0
 //  as the feedback bit.
 //
+//  ym2608 selects Grudge Match's sound board (MAME sound2608b_map, D-048):
+//
+//    1000        W    nothing
+//    2000        R    command latch from the main CPU (read clears IRQ)
+//    4000-4003   RW   YM2608 (it8_ym2608)
+//    6000-67FF   RW   RAM
+//    8000-FFFF   R    program ROM
+//
+//  FIRQ from the YM2608, its SSG port B bit 0 as the feedback bit, no OKI.
+//  The YM2608 reads its ADPCM-B ROM and rhythm ROM from SDRAM bank 2, where
+//  the OKI's samples are on the other boards. Mix as MAME: 0.75 (L + R).
+//
 //  Copyright (C) 2026 Gm0rk. GPL-2.0-or-later, see LICENSE.
 //============================================================================
 
@@ -40,6 +52,7 @@ module it8_sound
 	input                    oki_cen,       // 1 MHz
 	input                    ym2203,        // 6809 board sound map (see above)
 	input                    pia_brd,       // YM3812 board with a PIA (see above)
+	input                    ym2608,        // Grudge Match's YM2608 board (see above)
 
 	input                    cmd_we,        // main CPU write to the command latch
 	input              [7:0] cmd,
@@ -78,6 +91,7 @@ reg   [7:0] cmd_latch;
 wire        via_irq;
 wire        ym_irq_n;
 wire        ym3_irq_n;                  // YM2203 (6809 boards)
+wire        opna_irq_n;                 // YM2608 (ym2608)
 
 mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 (
@@ -91,7 +105,7 @@ mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 	.BS       (),
 	.BA       (),
 	.nIRQ     (~cmd_pend),
-	.nFIRQ    (ym2203 ? ym3_irq_n : pia_brd ? ym_irq_n : ~(via_irq | ~ym_irq_n)),
+	.nFIRQ    (ym2608 ? opna_irq_n : ym2203 ? ym3_irq_n : pia_brd ? ym_irq_n : ~(via_irq | ~ym_irq_n)),
 	.nNMI     (1'b1),
 	.AVMA     (),
 	.BUSY     (),
@@ -104,12 +118,13 @@ mc6809is #(.ILLEGAL_INSTRUCTIONS("GHOST")) cpu
 
 assign dbg_pc = addr;
 
-wire sel_latch = (addr == 16'h1000);
-wire sel_ym    = !ym2203 && (addr[15:1] == 15'h1000);   // 2000-2001
+wire sel_latch = (addr == (ym2608 ? 16'h2000 : 16'h1000));
+wire sel_ym    = !ym2203 && !ym2608 && (addr[15:1] == 15'h1000);   // 2000-2001
 wire sel_ym3   =  ym2203 && (addr[15:2] == 14'h0800);   // 2000-2003
-wire sel_ram   = (addr[15:11] == 5'b00110);             // 3000-37FF
-wire sel_oki   = (addr == 16'h4000);
-wire sel_via   = !ym2203 && !pia_brd && (addr[15:4] == 12'h500);
+wire sel_opna  =  ym2608 && (addr[15:2] == 14'h1000);   // 4000-4003
+wire sel_ram   = (addr[15:11] == (ym2608 ? 5'b01100 : 5'b00110)); // 6000-67FF / 3000-37FF
+wire sel_oki   = !ym2608 && (addr == 16'h4000);
+wire sel_via   = !ym2203 && !pia_brd && !ym2608 && (addr[15:4] == 12'h500);
 wire sel_pia   =  pia_brd && (addr[15:2] == 14'h1400);  // 5000-5003
 wire sel_rom   = addr[15];
 
@@ -267,10 +282,62 @@ always @(posedge clk) begin
 	else if (ym3_iob_oe) special_q <= ym3_iob[0];
 end
 
-assign special = ym2203 ? special_q : pia_brd ? pia_pb[0] : via_pb[0];
+// ---------------------------------------------------------------------------
+// YM2608 (ym2608), at 8 MHz (clk / 6)
+
+wire  [7:0] opna_dout, opna_iob;
+wire        opna_iob_oe;
+wire        opna_mem_req;
+wire [17:0] opna_mem_addr;
+reg         opna_mem_ack;
+reg   [7:0] opna_mem_data;
+wire signed [16:0] opna_snd, opna_fm, opna_pcm;
+reg   [2:0] opna_div;
+reg         opna_cen;
+
+always @(posedge clk) begin
+	opna_cen <= 1'b0;
+	if (reset) opna_div <= 3'd0;
+	else if (opna_div == 3'd5) begin
+		opna_div <= 3'd0;
+		opna_cen <= 1'b1;
+	end
+	else opna_div <= opna_div + 3'd1;
+end
+
+it8_ym2608 ym2608_chip
+(
+	.clk      (clk),
+	.rst      (reset | ~ym2608),
+	.cen      (opna_cen),
+	.addr     (addr[1:0]),
+	.wr       (wr & sel_opna),
+	.din      (cpu_dout),
+	.dout     (opna_dout),
+	.irq_n    (opna_irq_n),
+	.iob      (opna_iob),
+	.iob_oe   (opna_iob_oe),
+	.mem_req  (opna_mem_req),
+	.mem_addr (opna_mem_addr),
+	.mem_ack  (opna_mem_ack),
+	.mem_data (opna_mem_data),
+	.snd      (opna_snd),
+	.snd_fm   (opna_fm),
+	.snd_pcm  (opna_pcm),
+	.sample   ()
+);
+
+reg special_opna;
+always @(posedge clk) begin
+	if (reset)            special_opna <= 1'b0;
+	else if (opna_iob_oe) special_opna <= opna_iob[0];
+end
+
+assign special = ym2608 ? special_opna : ym2203 ? special_q : pia_brd ? pia_pb[0] : via_pb[0];
 
 // ---------------------------------------------------------------------------
-// OKI M6295 and its sample ROM in SDRAM (one-word cache).
+// OKI M6295 and its sample ROM in SDRAM (one-word cache). With ym2608 the
+// same port and cache serve the YM2608's byte reads instead.
 
 wire  [7:0] oki_dout;
 wire [17:0] oki_addr;
@@ -278,7 +345,8 @@ wire signed [13:0] pcm;
 reg  [16:0] pcm_tag;
 reg  [15:0] pcm_word;
 reg         pcm_valid, pcm_wait;
-wire        pcm_hit = pcm_valid && (pcm_tag == oki_addr[17:1]);
+wire [17:0] pcm_byte = ym2608 ? opna_mem_addr : oki_addr;
+wire        pcm_hit  = pcm_valid && (pcm_tag == pcm_byte[17:1]);
 
 jt6295 #(.INTERPOL(0)) oki
 (
@@ -297,6 +365,7 @@ jt6295 #(.INTERPOL(0)) oki
 );
 
 always @(posedge clk) begin
+	opna_mem_ack <= 1'b0;
 	if (reset) begin
 		pcm_valid <= 1'b0;
 		pcm_wait  <= 1'b0;
@@ -309,11 +378,19 @@ always @(posedge clk) begin
 		end
 	end
 	else if (!pcm_hit) begin
-		pcm_addr  <= PCM_BASE + {7'd0, oki_addr[17:1]};
-		pcm_tag   <= oki_addr[17:1];
-		pcm_valid <= 1'b0;
-		pcm_wait  <= 1'b1;
-		pcm_req   <= ~pcm_req;
+		// The OKI asks all the time; the YM2608 only while mem_req is high.
+		if (!ym2608 || opna_mem_req) begin
+			pcm_addr  <= PCM_BASE + {7'd0, pcm_byte[17:1]};
+			pcm_tag   <= pcm_byte[17:1];
+			pcm_valid <= 1'b0;
+			pcm_wait  <= 1'b1;
+			pcm_req   <= ~pcm_req;
+		end
+	end
+	else if (ym2608 && opna_mem_req && !opna_mem_ack) begin
+		// One acknowledge a request: mem_req drops the clock after it.
+		opna_mem_ack  <= 1'b1;
+		opna_mem_data <= pcm_byte[0] ? pcm_word[7:0] : pcm_word[15:8];
 	end
 end
 
@@ -326,6 +403,7 @@ always @(*) begin
 	else if (sel_latch) cpu_din = cmd_latch;
 	else if (sel_ym)    cpu_din = ym_dout;
 	else if (sel_ym3)   cpu_din = ym3_dout;
+	else if (sel_opna)  cpu_din = opna_dout;
 	else if (sel_oki)   cpu_din = oki_dout;
 	else if (sel_via)   cpu_din = via_dout;
 	else if (sel_pia)   cpu_din = pia_dout;
@@ -336,14 +414,19 @@ end
 // Mixer: MAME routes both chips to mono at 0.75. One OKI voice at full
 // scale (12 bits) matches the YM3812's full scale. The YM2203's SSG
 // channels (0-255 each) are 0.07 of full scale (x 9), as on the Capcom
-// Bowling board.
+// Bowling board. The YM2608 is ymfm's L + R at 0.75 (MAME: both outputs to
+// mono at 0.75); FM only and PCM only take its FM or its rhythm + ADPCM-B
+// part.
 
 wire        [9:0] psg_sum  = {2'b00, psg_a} + {2'b00, psg_b} + {2'b00, psg_c};
 wire signed [19:0] fm_in    = ym2203 ? fm3 : fm;
 wire signed [19:0] psg_in   = ym2203 ? $signed({10'd0, psg_sum}) * 20'sd9 : 20'sd0;
 wire signed [19:0] fm_part  = (mix_sel == 2'd2) ? 20'sd0 : ((fm_in * 20'sd3) >>> 2) + psg_in;
 wire signed [19:0] pcm_part = (mix_sel == 2'd1) ? 20'sd0 : pcm * 12;
-wire signed [19:0] mix      = fm_part + pcm_part;
+wire signed [16:0] opna_sel = (mix_sel == 2'd1) ? opna_fm : (mix_sel == 2'd2) ? opna_pcm : opna_snd;
+wire signed [19:0] opna_ext = {{3{opna_sel[16]}}, opna_sel};
+wire signed [19:0] opna_mix = (opna_ext * 20'sd3) >>> 2;
+wire signed [19:0] mix      = ym2608 ? opna_mix : fm_part + pcm_part;
 
 always @(posedge clk) begin
 	if      (mix >  20'sd32767) audio <= 16'sh7FFF;
