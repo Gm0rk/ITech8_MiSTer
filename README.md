@@ -10,7 +10,8 @@ game on the 6809 blitter board. **Golden Tee Golf**, **Golden Tee Golf II**
 and **Golden Par Golf**, on the same board, are not yet tested on hardware,
 and neither are the newer ones: **Wheel Of Fortune**, **Poker Dice**,
 **Hot Shots Tennis**, **Arlington Horse Racing**, **Peggle**,
-**Neck-N-Neck** and, newest, **Rim Rockin' Basketball**.
+**Neck-N-Neck**, **Rim Rockin' Basketball** and, newest, **Grudge
+Match**.
 
 > **This core was made with AI.** The RTL and documentation were written in
 > collaboration with an AI assistant (Claude, by Anthropic).
@@ -26,8 +27,7 @@ The table lists every game MAME runs on Incredible Technologies' 8-bit
 hardware: the bowling games in its `capbowl` driver, the rest in its
 `itech8` driver. This core implements three of the boards: the 68000
 board, which only Ninja Clowns uses, the earlier bowling board ¹, and the
-6809 blitter board ², so far for every planned game on it but one: Grudge
-Match, which comes next. Three games are not
+6809 blitter board ², for every planned game on it. Three games are not
 planned ³.
 
 | Game | Year | Main CPU | Status |
@@ -39,7 +39,7 @@ planned ³.
 | **Golden Par Golf** (joystick v1.1, v1.0) | 1991-92 | 6809 ² | **Added**, not yet tested on hardware |
 | **Golden Tee Golf** (joystick v3.3, v3.1; trackball v2.1, v2.0, v1.0) | 1989-90 | 6809 ² | **Added**, not yet tested on hardware |
 | **Golden Tee Golf II** (trackball v2.2, v1.1; joystick v1.0) | 1989-92 | 6809 ² | **Added**, not yet tested on hardware |
-| Grudge Match (Yankee Game Technology) | 1989 | 6809 | Planned (YM2608 sound board) |
+| **Grudge Match** (Yankee Game Technology) | 1989 | 6809 ² | **Added**, not yet tested on hardware |
 | **Hot Shots Tennis** (v1.1, v1.0) | 1990 | 6809 ² | **Added**, not yet tested on hardware |
 | **Neck-N-Neck** (v1.2) | 1992 | 6809 ² | **Added**, not yet tested on hardware |
 | **Ninja Clowns** | 1991 | 68000 | **Playable, with sound** |
@@ -71,7 +71,10 @@ layout (two 512 × 256 pages of 4-bit pixels, 8 MHz dots, wider pictures)
 and have a YM3812 sound board with a PIA; Poker Dice shows one 8-bit page.
 Rim Rockin' Basketball has an HD6309 at 3 MHz (run here as a 6809, which
 is all the game uses), Ninja Clowns' screen layout and sound board, and up
-to four players.
+to four players. Grudge Match, by Yankee Game Technology on IT's board,
+shows two layers of 16 colours each, whose palettes the board loads from
+the picture's own memory, and has a YM2608 sound board (FM music, drum
+sounds and ADPCM samples).
 
 ³ Not planned for now: Dyno Bop, Slick Shot and Super Strike Bowling, and
 the Strata Bowling v1 set built on Super Strike Bowling's board (MAME's
@@ -85,7 +88,7 @@ mechanical games.
 Ninja Clowns board    [##########]  10/10 sections working on hardware
 Bowling board         [########--]   8/10 sections confirmed on hardware
 6809 blitter board    [########--]   8/10 sections confirmed on hardware
-Games                 [#########-]  14/15 added, 4 playable on hardware (3 not planned)
+Games                 [##########]  15/15 added, 4 playable on hardware (3 not planned)
 ```
 
 The Ninja Clowns board's ten sections are the 68000 and memory map, SDRAM
@@ -107,9 +110,9 @@ and their reasons are in `DECISIONS.md`.
 |---|---|---|---|
 | Board | IT 8-bit, 68000 variant: lower board P/N 1029 REV3A and YM3812 sound board P/N 1038 REV2 | IT bowling board (1988); Bowl-O-Rama adds a turbo board | IT 8-bit, 6809 variant, Strata Bowling style (single board); Golden Par Golf and Golden Tee Golf II v2.2: the 1992 board P/N 1047 with the YM3812 sound board P/N 1038 |
 | Main CPU | 68000 @ 12 MHz | 6809 @ 2 MHz | 6809 @ 2 MHz (Rim Rockin' Basketball: HD6309 @ 3 MHz) |
-| Sound | 6809 @ 2 MHz, YM3812, OKI M6295, 6522 VIA | 6809 @ 2 MHz, YM2203, DAC | 6809 @ 2 MHz, YM2203, OKI M6295 (Golden Par Golf, Golden Tee Golf II v2.2, Rim Rockin' Basketball: Ninja Clowns' sound board; Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck: YM3812, OKI M6295, 6821 PIA) |
-| Video | TMS34061 and ITV4400 blitter, two 512 × 256 VRAM pages, MS176 RAMDAC (256 colours) | TMS34061, 64 KB VRAM, 16 colours per line from 4096 | TMS34061 and ITV4400 blitter, 6-bit RAMDAC (256 colours); a 256 × 256 8-bit background and a 4-bit foreground, or Ninja Clowns' two pages (Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck, Rim Rockin' Basketball), or one 8-bit page (Poker Dice) |
-| Display | 362 × 240, 15.686 kHz, 59.64 Hz | 360 × 245 (Bowl-O-Rama 240), vertical, 15.81 kHz, about 60 Hz | 256 × 240, 15.71 kHz, 59.7 Hz; 416 × 240 (Hot Shots Tennis, Peggle) or 392 × 240 (Arlington, Neck-N-Neck, Rim Rockin' Basketball), 15.69 kHz, 59.65 Hz; vertical (Strata Bowling; Hot Shots Tennis, Peggle and Poker Dice turned the other way) or horizontal |
+| Sound | 6809 @ 2 MHz, YM3812, OKI M6295, 6522 VIA | 6809 @ 2 MHz, YM2203, DAC | 6809 @ 2 MHz, YM2203, OKI M6295 (Golden Par Golf, Golden Tee Golf II v2.2, Rim Rockin' Basketball: Ninja Clowns' sound board; Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck: YM3812, OKI M6295, 6821 PIA; Grudge Match: YM2608) |
+| Video | TMS34061 and ITV4400 blitter, two 512 × 256 VRAM pages, MS176 RAMDAC (256 colours) | TMS34061, 64 KB VRAM, 16 colours per line from 4096 | TMS34061 and ITV4400 blitter, 6-bit RAMDAC (256 colours); a 256 × 256 8-bit background and a 4-bit foreground, or Ninja Clowns' two pages (Hot Shots Tennis, Arlington, Peggle, Neck-N-Neck, Rim Rockin' Basketball), or one 8-bit page (Poker Dice), or two 4-bit layers with 16 colours each from 4096 (Grudge Match) |
+| Display | 362 × 240, 15.686 kHz, 59.64 Hz | 360 × 245 (Bowl-O-Rama 240), vertical, 15.81 kHz, about 60 Hz | 256 × 240, 15.71 kHz, 59.7 Hz; 416 × 240 (Hot Shots Tennis, Peggle, Grudge Match) or 392 × 240 (Arlington, Neck-N-Neck, Rim Rockin' Basketball), 15.69 kHz, 59.65 Hz; vertical (Strata Bowling; Hot Shots Tennis, Peggle and Poker Dice turned the other way) or horizontal |
 | Controls | 8-way stick, 3 buttons | trackball (mouse or stick), 2 hook buttons | trackball (mouse or stick) and 2 buttons; or 8-way stick and Swing (golf joystick sets); each other game its own (below) |
 | NVRAM | 16 KB | 2 KB | 8 KB |
 
@@ -154,7 +157,9 @@ ROMs are not included. Copy:
   (with `hstennis10.zip`); `arlingtn.zip` (with `arlingtna.zip` and
   `arlingtni.zip`); `peggle.zip` (with `pegglet.zip`); `neckneck.zip`;
   `rimrockn.zip` (with `rimrockn20.zip`, `rimrockn16.zip`,
-  `rimrockn15.zip`, `rimrockn12.zip` and `rimrockn12b.zip`).
+  `rimrockn15.zip`, `rimrockn12.zip` and `rimrockn12b.zip`); `grmatch.zip`
+  together with MAME's `ym2608.zip` (the YM2608's own drum sounds, which
+  MAME needs for this game as well).
   Merged sets work as well, each clone inside its parent's zip
 
 Keep only one ITech8 core in `_Arcade/cores/`: MiSTer loads the matching file
@@ -201,6 +206,8 @@ Coin is coin slot 1, the second's slot 2):
 * Rim Rockin' Basketball: stick, Shoot (A), Pass (B) and Start, for each
   of up to four players on four controllers; player n's Coin is coin slot
   n. Any player's Service, or OSD Service Mode, opens the service menu.
+* Grudge Match: stick, Button 1 (A), Button 2 (B) and Start, for each of
+  two players.
 
 **Setup menus**, as the operator manuals describe them:
 
@@ -230,7 +237,10 @@ board and MAME do the same), and start the ball at the edge of the lane.
 Trackball Sideways (1x to 4x) multiplies the sideways counts only, for
 a small trackball that needs several spins to bring the ball to the
 middle; the forward roll is unchanged. It cannot go past the most the board
-can read, about 28 counts a frame on each axis.
+can read, about 28 counts a frame on each axis. In the bowling games a roll
+faster than that is held at the most the game can read between two of its
+reads (7 counts), and the rest follows, so a fast roll or a high gain never
+reads as a move the other way.
 
 **Trackball presets and calibration:** OSD Trackball Options → Preset
 picks Off (Trackball Speed and Trackball Sideways, as above) or one of
@@ -240,9 +250,12 @@ trackball (the bowling games and the golf trackball sets) fills the chosen
 preset for you, or Preset 1 when Preset is Off: it asks for three throws
 or swings as hard as in play and measures them the way the game does, so
 that a hard throw just reaches the game's top speed or full swing power,
-then, in the bowling games, three sideways rolls, so that a roll moves the
-ball about half the lane. A page over the game shows each try and the
-gains found. Cancel calibration stops it, and it stops by itself after 30
+then, in the bowling games, three single sideways rolls of the kind you
+make to aim, so that one roll moves the ball about half the lane (only the
+most a roll covers in half a second counts, so rolling on does not change
+the result, and the sideways gain is never set below the forward one). A
+page over the game shows each try and the gains found; they apply at
+once, so the ball shows how they feel. Cancel calibration stops it, and it stops by itself after 30
 seconds without a throw; either way the preset is unchanged. It assumes
 the game's own trackball setting is at factory. Save settings in the OSD
 keeps the presets, for that game only.
@@ -261,11 +274,14 @@ again.
 
 **OSD:** aspect ratio, scandoubler effects, scaling, CRT Adjust, Service
 Mode and Reset; the games on the IT blitter boards add the audio mix (FM
-+ PCM, FM only, PCM only); the vertical games add Orientation
-(Horizontal: turned for a normal screen; Vertical: for a monitor turned as
-in the original cabinets, with its left edge at the bottom, or for Hot
-Shots Tennis, Peggle and Poker Dice at the top; Vertical Flip: for a
-monitor turned the other way, on every output, shown one frame later); the
++ PCM, FM only, PCM only; in Grudge Match PCM is the YM2608's drums and
+samples); the vertical games add Orientation
+(Horizontal: turned for a normal screen; Horizontal Flip: turned for a
+normal screen the other way round, the game's top on the other side;
+Vertical: for a monitor turned as in the original cabinets, with its left
+edge at the bottom, or for Hot Shots Tennis, Peggle and Poker Dice at the
+top; Vertical Flip: for a monitor turned the other way, on every output,
+shown one frame later); the
 trackball games add Trackball Options (Preset, Trackball Speed, Trackball
 Sideways, the presets' gains, Calibrate and Cancel calibration), the dial
 games Trackball Options with Trackball Speed.
@@ -291,6 +307,7 @@ hardware behaviour:
 | `6821pia.cpp` | Aaron Giles, Nathan Woods | 6821 registers (sound board of Hot Shots Tennis style) |
 | `gen_latch.cpp` | Miodrag Milanovic | sound command latch |
 | `capbowl.cpp` | Zsolt Vasvari | bowling board: memory maps, row palettes, turbo board, trackball, watchdog |
+| `ymfm` (`ymfm_opn.cpp`, `ymfm_adpcm.cpp`) | Aaron Giles | the YM2608's rhythm and ADPCM-B sections, and the reference its FM was checked against |
 | `ticket.cpp` | Aaron Giles | ticket dispenser sensor |
 
 MAME is a reference for *behaviour*; no MAME code is compiled into this core.
@@ -306,8 +323,8 @@ the synchronous version by Alexey Melnikov (**Sorgelig**) with the
 reset-interrupt fix by **RndMnkIII**.
 
 **[JTOPL, JT6295 and JT12](https://github.com/jotego)** by Jose Tejada
-(**jotego**): the YM3812, the OKI M6295, and the YM2203 (JT03, with JT49 for
-its SSG).
+(**jotego**): the YM3812, the OKI M6295, the YM2203 (JT03, with JT49 for
+its SSG), and the YM2608's FM section and timers (JT12).
 
 **[MiSTer-CRT-Adjust](https://github.com/rmonic79/MiSTer-CRT-Adjust)** by
 Umberto Parisi (**rmonic79**): CRT geometry adjustment.
