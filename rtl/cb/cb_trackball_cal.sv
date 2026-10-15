@@ -42,6 +42,20 @@
 //  cancel (OSD Cancel calibration), or 30 seconds (IDLE_FRAMES) waiting
 //  for a throw or roll, ends it with the gains unchanged.
 //
+//  With FINE_TUNE (build 031, D-052) the bowling games then get a tuning
+//  step before anything is written: the gains found are used at once (tune,
+//  tune_gain, tune_gain_x override the preset's), the page says ROLL ONCE
+//  WATCH BOWLER and HOOK R UP  L DOWN  START, and the player rolls the
+//  bowler once at a time and judges by eye how far one roll takes it (half
+//  the lane: edge to middle, Strata Bowling middle to gutter). Hook Right
+//  (btn_up) and Hook Left (btn_dn) step the sideways gain up and down (1-49,
+//  no floor: the player decides), Start (btn_ok) writes both gains and ends
+//  it, as does 30 s without a roll or a press; Cancel calibration ends it
+//  with nothing written. While tuning, and until those buttons are let go
+//  after it, mask is high so the top level keeps them from the game.
+//  FINE_TUNE 0 is build 030's calibration exactly: the gains are written as
+//  soon as they are found.
+//
 //  Gain step n (1-49): 2^((n-25)/8) of Normal, 12 % to 800 %; game counts
 //  per mouse count x 256 = 128 x that (gain_of).
 //
@@ -58,7 +72,8 @@
 module cb_trackball_cal #(
 	parameter BOX_X       = 8,
 	parameter BOX_Y       = 8,
-	parameter IDLE_FRAMES = 1800           // 30 s waiting for a throw or roll (fewer in the page test)
+	parameter IDLE_FRAMES = 1800,          // 30 s waiting for a throw or roll (fewer in the page test)
+	parameter FINE_TUNE   = 1              // 1: the bowling games' tuning step (above); 0: build 030
 )(
 	input             clk,
 	input             reset,
@@ -72,6 +87,14 @@ module cb_trackball_cal #(
 	output reg  [5:0] gain_n = 6'd0,
 	output reg  [5:0] gain_x_n = 6'd0,  // 0: as forward (golf)
 	output reg        wr = 1'b0,      // one clock: write gain_n and gain_x_n to the OSD
+
+	input             btn_up,         // FINE_TUNE: Hook Right (sideways gain up)
+	input             btn_dn,         //   Hook Left (down)
+	input             btn_ok,         //   Start (keep)
+	output            tune,           // tuning: tune_gain and tune_gain_x replace the preset's
+	output     [10:0] tune_gain,
+	output     [10:0] tune_gain_x,
+	output reg        mask = 1'b0,    // keep btn_* from the game
 
 	input       [5:0] sel,            // a preset's gain steps (0: none)
 	input       [5:0] sel_x,
@@ -90,7 +113,7 @@ module cb_trackball_cal #(
 // Messages (MSGS below).
 localparam [3:0] M_NONE = 4'd0, M_NOTB = 4'd1, M_BOWL = 4'd2, M_BOR = 4'd3, M_GOLF = 4'd4,
                  M_THROW = 4'd5, M_SWING = 4'd6, M_SLOW = 4'd7, M_DONE = 4'd8, M_SIDE = 4'd9,
-                 M_CANCEL = 4'd10, M_IDLE = 4'd11;
+                 M_CANCEL = 4'd10, M_IDLE = 4'd11, M_WATCH = 4'd12, M_KEYS = 4'd13;
 
 reg  [3:0] msg_a = 4'd0, msg_b = 4'd0;
 
@@ -267,7 +290,8 @@ wire [15:0] goal_x = (kind == 2'd3) ? 16'd0  : (kind == 2'd2) ? 16'd93 : 16'd192
 // ---------------------------------------------------------------------------
 // The sequence: three throws (ph 0), then three sideways rolls (ph 1).
 
-localparam [2:0] S_IDLE = 3'd0, S_WAIT = 3'd1, S_MOVE = 3'd2, S_CALC = 3'd3, S_DONE = 3'd4;
+localparam [2:0] S_IDLE = 3'd0, S_WAIT = 3'd1, S_MOVE = 3'd2, S_CALC = 3'd3, S_DONE = 3'd4,
+                 S_TUNE = 3'd5;
 localparam integer IDLE_MAX_I = IDLE_FRAMES - 1;
 localparam  [10:0] IDLE_MAX   = IDLE_MAX_I[10:0];
 
@@ -306,6 +330,24 @@ wire [31:0] want = {8'd0, cx ? goal_x : goal, 8'd0};
 wire [31:0] err  = (prod > want) ? prod - want : want - prod;
 
 wire [3:0] m_prompt = ph ? M_SIDE : (kind == 2'd3) ? M_SWING : M_THROW;
+wire [3:0] m_kind   = (kind == 2'd3) ? M_GOLF : (kind == 2'd2) ? M_BOR : M_BOWL;
+
+// Tuning (FINE_TUNE): the buttons' presses, and the gains in use meanwhile.
+reg        up_d = 1'b0, dn_d = 1'b0, ok_d = 1'b0;
+always @(posedge clk) {up_d, dn_d, ok_d} <= {btn_up, btn_dn, btn_ok};
+wire       up_p = btn_up & ~up_d;
+wire       dn_p = btn_dn & ~dn_d;
+wire       ok_p = btn_ok & ~ok_d;
+
+assign tune        = (st == S_TUNE);
+assign tune_gain   = gain_of(gain_n);
+assign tune_gain_x = gain_of(gain_x_n);
+
+always @(posedge clk) begin
+	if (reset)                          mask <= 1'b0;
+	else if (st == S_TUNE)              mask <= 1'b1;
+	else if (!(btn_up | btn_dn | btn_ok)) mask <= 1'b0;
+end
 wire       moved    = ph ? (hx0 != 16'd0) : (h0 != 16'd0);
 
 always @(posedge clk) begin
@@ -329,13 +371,15 @@ always @(posedge clk) begin
 			st    <= S_DONE;
 		end
 		else begin
-			msg_a <= (kind == 2'd3) ? M_GOLF : (kind == 2'd2) ? M_BOR : M_BOWL;
+			msg_a <= m_kind;
 			msg_b <= (kind == 2'd3) ? M_SWING : M_THROW;
 			st    <= S_WAIT;
 		end
 	end
-	else if (cancel && (st == S_WAIT || st == S_MOVE)) begin
+	else if (cancel && (st == S_WAIT || st == S_MOVE || st == S_TUNE)) begin
+		msg_a <= m_kind;
 		msg_b <= M_CANCEL;
+		done  <= 1'b0;
 		hold  <= 10'd180;
 		st    <= S_DONE;
 	end
@@ -435,12 +479,37 @@ always @(posedge clk) begin
 				else begin
 					// never below the forward gain (see above)
 					gain_x_n <= (((err < ebest) ? n : nbest) < gain_n) ? gain_n : ((err < ebest) ? n : nbest);
-					wr       <= 1'b1;
 					done     <= 1'b1;
-					msg_b    <= M_DONE;
-					hold     <= 10'd600;
-					st       <= S_DONE;
+					if (FINE_TUNE != 0) begin
+						// the bowling games: tune by eye before writing
+						msg_a <= M_WATCH;
+						msg_b <= M_KEYS;
+						idle  <= 11'd0;
+						st    <= S_TUNE;
+					end
+					else begin
+						wr    <= 1'b1;
+						msg_b <= M_DONE;
+						hold  <= 10'd600;
+						st    <= S_DONE;
+					end
 				end
+			end
+		end
+
+		// Hook Right / Left step the sideways gain, used at once; Start, or
+		// 30 s without a roll or a press, writes both gains.
+		S_TUNE: begin
+			if (up_p && gain_x_n != 6'd49) gain_x_n <= gain_x_n + 6'd1;
+			if (dn_p && gain_x_n != 6'd1)  gain_x_n <= gain_x_n - 6'd1;
+			if (up_p | dn_p | (fr_d & (hx0 != 16'd0 || h0 != 16'd0))) idle <= 11'd0;
+			else if (fr_d) idle <= idle + 11'd1;
+			if (ok_p || (fr_d && idle == IDLE_MAX)) begin
+				wr    <= 1'b1;
+				msg_a <= m_kind;
+				msg_b <= M_DONE;
+				hold  <= 10'd600;
+				st    <= S_DONE;
 			end
 		end
 
@@ -483,7 +552,7 @@ localparam [8*24*14-1:0] TEXT = {
 };
 
 // The changing lines (msg_a on row 1, msg_b on row 3), line 0 first.
-localparam [8*24*12-1:0] MSGS = {
+localparam [8*24*14-1:0] MSGS = {
 	"                        ",
 	"NOT A TRACKBALL GAME    ",
 	"BOWLING  8 FRAMES       ",
@@ -495,7 +564,9 @@ localparam [8*24*12-1:0] MSGS = {
 	"DONE  GAINS SET         ",
 	"ONE ROLL SIDEWAYS TO AIM",
 	"CANCELLED  NOTHING SET  ",
-	"NO MOVEMENT  CANCELLED  "
+	"NO MOVEMENT  CANCELLED  ",
+	"ROLL ONCE  WATCH BOWLER ",
+	"HOOK R UP  L DOWN  START"
 };
 
 localparam [6*14-1:0] FMT = {
@@ -550,7 +621,7 @@ it8_dbg_page #(
 	.TEXT      (TEXT),
 	.FMT       (FMT),
 	.ROWS      (5'd14),
-	.N_MSG     (12),
+	.N_MSG     (14),
 	.MSGS      (MSGS),
 	.MSG_PAGE  (0),
 	.MSG_ROW_A (1),
