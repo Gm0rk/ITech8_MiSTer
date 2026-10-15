@@ -489,8 +489,12 @@ function [15:0] jlayout(input [31:0] j, input two, input one);
 	jlayout = two ? {j[15:10], j[8:6], 1'b0, j[5:0]} :
 	          one ? {j[15:10], j[7:5], 2'b00, j[4:0]} : j[15:0];
 endfunction
-wire [15:0] j0 = jlayout(joystick_0, has_tb, one_btn);
-wire [15:0] j1 = jlayout(joystick_1, has_tb, one_btn);
+wire [15:0] j0_in = jlayout(joystick_0, has_tb, one_btn);
+wire [15:0] j1    = jlayout(joystick_1, has_tb, one_btn);
+// While the calibration's tuning step uses player 1's Hook Left, Hook Right
+// and Start (D-052), the game does not get them.
+wire        cal_mask;
+wire [15:0] j0 = j0_in & ~{8'd0, cal_mask, 1'b0, cal_mask, cal_mask, 4'd0};
 
 wire [7:0] p1 = {j0[4], j0[5], j0[0], j0[1], j0[2], j0[3], j0[7], j0[6]};
 wire [7:0] p2 = {j1[4], j1[5], j1[0], j1[1], j1[2], j1[3], j1[7], j1[6]};
@@ -763,12 +767,22 @@ wire  [5:0] pre_x = (tb_preset == 2'd1) ? status[108:103] :
                     (tb_preset == 2'd2) ? status[34:29] : status[46:41];
 wire [10:0] pre_gain, pre_gain_x;          // their gains (cb_trackball_cal.sv), 0 for 0
 
-assign tb_gain   = (tb_preset == 2'd0) ? 11'd0 : (pre_gain != 11'd0) ? pre_gain : 11'd128;
-assign tb_gain_x = (tb_preset == 2'd0) ? 11'd0 : pre_gain_x;
-assign tb_side   = (tb_preset == 2'd0) ? status[20:19] : 2'd0;
+// While the calibration tunes (D-052), its gains are used instead.
+wire        cal_tune;
+wire [10:0] cal_tune_gain, cal_tune_gain_x;
+
+assign tb_gain   = cal_tune ? cal_tune_gain : (tb_preset == 2'd0) ? 11'd0 : (pre_gain != 11'd0) ? pre_gain : 11'd128;
+assign tb_gain_x = cal_tune ? cal_tune_gain_x : (tb_preset == 2'd0) ? 11'd0 : pre_gain_x;
+assign tb_side   = (tb_preset == 2'd0 && !cal_tune) ? status[20:19] : 2'd0;
 
 // Trackball calibration (D-044 to D-046): OSD Trackball Options > Calibrate
 // trackball (status bit 73) starts it, Cancel calibration (47) stops it.
+// CAL_FINE_TUNE 1 adds the bowling games' tuning step after the
+// measurement (build 031, D-052): the gains found are used at once, Hook
+// Right and Hook Left step the sideways gain while the player watches the
+// bowler, Start writes them. 0 builds build 030's calibration (the gains
+// written as soon as they are found) and leaves the buttons alone.
+localparam CAL_FINE_TUNE = 1;
 // The preset chosen when it starts receives the gains (Off: Preset 1, which
 // is then chosen), in one status write with the trigger bits cleared so
 // the write does not start it again. cal_kind is how the game measures a
@@ -804,7 +818,7 @@ end
 assign cal_status_in  = cal_st;
 assign cal_status_set = cal_wr;
 
-cb_trackball_cal tb_cal
+cb_trackball_cal #(.FINE_TUNE(CAL_FINE_TUNE)) tb_cal
 (
 	.clk        (clk_sys),
 	.reset      (reset),
@@ -818,6 +832,13 @@ cb_trackball_cal tb_cal
 	.gain_n     (cal_gain),
 	.gain_x_n   (cal_gain_x),
 	.wr         (cal_wr),
+	.btn_up     (j0_in[5]),               // Hook Right
+	.btn_dn     (j0_in[4]),               // Hook Left
+	.btn_ok     (j0_in[7]),               // Start
+	.tune       (cal_tune),
+	.tune_gain  (cal_tune_gain),
+	.tune_gain_x (cal_tune_gain_x),
+	.mask       (cal_mask),
 	.sel        (pre_f),
 	.sel_x      (pre_x),
 	.sel_gain   (pre_gain),
