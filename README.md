@@ -25,7 +25,7 @@ db_url = https://raw.githubusercontent.com/Gm0rk/Gm0rkCores/db/db.json.zip
 ```
 
 ## Games
-
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/itech8_Title_Screen.png" width="800">
 <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/itech8_Gameplay.png" width="800">
 
 The table lists every game MAME runs on Incredible Technologies' 8-bit
