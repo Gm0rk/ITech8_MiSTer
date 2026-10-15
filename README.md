@@ -6,12 +6,11 @@ platform. It is built on `Template_MiSTer` with rmonic79's CRT Adjust built
 in. **Ninja Clowns** (1991) boots and is fully playable. Capcom Bowling,
 Coors Light Bowling and Bowl-O-Rama, on IT's earlier bowling board, are
 playable with sound too, and so is **Strata Bowling** (1990), the first
-game on the 6809 blitter board. **Golden Tee Golf**, **Golden Tee Golf II**
-and **Golden Par Golf**, on the same board, are not yet tested on hardware,
-and neither are the newer ones: **Wheel Of Fortune**, **Poker Dice**,
-**Hot Shots Tennis**, **Arlington Horse Racing**, **Peggle**,
-**Neck-N-Neck**, **Rim Rockin' Basketball** and, newest, **Grudge
-Match**.
+game on the 6809 blitter board, along with every other planned game on
+it: **Golden Tee Golf**, **Golden Tee Golf II**, **Golden Par Golf**,
+**Wheel Of Fortune**, **Poker Dice**, **Hot Shots Tennis**, **Arlington
+Horse Racing**, **Peggle**, **Neck-N-Neck**, **Rim Rockin' Basketball**
+and **Grudge Match**.
 
 > **This core was made with AI.** The RTL and documentation were written in
 > collaboration with an AI assistant (Claude, by Anthropic).
@@ -38,24 +37,24 @@ planned ³.
 
 | Game | Year | Main CPU | Status |
 |---|---|---|---|
-| **Arlington Horse Racing** (v1.40-D, v1.21-D, v1.21-I) | 1991 | 6809 ² | **Added**, not yet tested on hardware |
+| **Arlington Horse Racing** (v1.40-D, v1.21-D, v1.21-I) | 1991 | 6809 ² | **Playable, with sound** |
 | **Bowl-O-Rama** | 1991 | 6809 ¹ | **Playable, with sound** |
 | **Capcom Bowling** (sets 1-4), **Coors Light Bowling** | 1988-89 | 6809 ¹ | **Playable, with sound** |
 | Dyno Bop (v1.1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
-| **Golden Par Golf** (joystick v1.1, v1.0) | 1991-92 | 6809 ² | **Added**, not yet tested on hardware |
-| **Golden Tee Golf** (joystick v3.3, v3.1; trackball v2.1, v2.0, v1.0) | 1989-90 | 6809 ² | **Added**, not yet tested on hardware |
-| **Golden Tee Golf II** (trackball v2.2, v1.1; joystick v1.0) | 1989-92 | 6809 ² | **Added**, not yet tested on hardware |
-| **Grudge Match** (Yankee Game Technology) | 1989 | 6809 ² | **Added**, not yet tested on hardware |
-| **Hot Shots Tennis** (v1.1, v1.0) | 1990 | 6809 ² | **Added**, not yet tested on hardware |
-| **Neck-N-Neck** (v1.2) | 1992 | 6809 ² | **Added**, not yet tested on hardware |
+| **Golden Par Golf** (joystick v1.1, v1.0) | 1991-92 | 6809 ² | **Playable, with sound** |
+| **Golden Tee Golf** (joystick v3.3, v3.1; trackball v2.1, v2.0, v1.0) | 1989-90 | 6809 ² | **Playable, with sound** |
+| **Golden Tee Golf II** (trackball v2.2, v1.1; joystick v1.0) | 1989-92 | 6809 ² | **Playable, with sound** |
+| **Grudge Match** (Yankee Game Technology) | 1989 | 6809 ² | **Playable, with sound** |
+| **Hot Shots Tennis** (v1.1, v1.0) | 1990 | 6809 ² | **Playable, with sound** |
+| **Neck-N-Neck** (v1.2) | 1992 | 6809 ² | **Playable, with sound** |
 | **Ninja Clowns** | 1991 | 68000 | **Playable, with sound** |
-| **Peggle** (joystick, trackball) | 1991 | 6809 ² | **Added**, not yet tested on hardware |
-| **Poker Dice** (v1.7) | 1991 | 6809 ² | **Added**, not yet tested on hardware |
-| **Rim Rockin' Basketball** (v2.2, v2.0, v1.6, v1.5, v1.2, v1.2 bootleg) | 1991 | HD6309 ² | **Added**, not yet tested on hardware |
+| **Peggle** (joystick, trackball) | 1991 | 6809 ² | **Playable, with sound** |
+| **Poker Dice** (v1.7) | 1991 | 6809 ² | **Playable, with sound** |
+| **Rim Rockin' Basketball** (v2.2, v2.0, v1.6, v1.5, v1.2, v1.2 bootleg) | 1991 | HD6309 ² | **Playable, with sound** |
 | Slick Shot (v2.2, v1.7, v1.6) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 | **Strata Bowling** (V3, V1) | 1990 | 6809 ² | **Playable, with sound** |
 | Super Strike Bowling (v1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
-| **Wheel Of Fortune** (sets 1, 2) | 1989 | 6809 ² | **Added**, not yet tested on hardware |
+| **Wheel Of Fortune** (sets 1, 2) | 1989 | 6809 ² | **Playable, with sound** |
 
 ¹ The earlier IT bowling board (MAME's `capbowl` driver): TMS34061 video
 with a 16-colour palette on every line but no ITV4400 blitter, a trackball,
@@ -94,7 +93,7 @@ mechanical games.
 Ninja Clowns board    [##########]  10/10 sections working on hardware
 Bowling board         [########--]   8/10 sections confirmed on hardware
 6809 blitter board    [########--]   8/10 sections confirmed on hardware
-Games                 [##########]  15/15 added, 4 playable on hardware (3 not planned)
+Games                 [##########]  15/15 added, 15 playable on hardware (3 not planned)
 ```
 
 The Ninja Clowns board's ten sections are the 68000 and memory map, SDRAM
@@ -260,10 +259,16 @@ then, in the bowling games, three single sideways rolls of the kind you
 make to aim, so that one roll moves the ball about half the lane (only the
 most a roll covers in half a second counts, so rolling on does not change
 the result, and the sideways gain is never set below the forward one). A
-page over the game shows each try and the gains found; they apply at
-once, so the ball shows how they feel. Cancel calibration stops it, and it stops by itself after 30
-seconds without a throw; either way the preset is unchanged. It assumes
-the game's own trackball setting is at factory. Save settings in the OSD
+page over the game shows each try and the gains found. In the bowling
+games a last step lets you tune the sideways gain by eye: the gains found
+are already in use, so roll the bowler and watch where it stops; Hook
+Right makes one roll carry it further, Hook Left less, about 9 % a press,
+until one ordinary roll moves it about half the lane; then Start keeps
+both gains. The hook buttons and Start do not reach the game during this
+step. Cancel calibration stops it at any point before the gains are kept,
+and it stops by itself after 30 seconds without a throw; either way the
+preset is unchanged (30 seconds idle in the tuning step keeps the gains
+as tuned). It assumes the game's own trackball setting is at factory. Save settings in the OSD
 keeps the presets, for that game only.
 
 **Setting up a trackball, spinner or analog controller:** the debug core
