@@ -28,13 +28,8 @@ db_url = https://raw.githubusercontent.com/Gm0rk/Gm0rkCores/db/db.json.zip
 <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/itech8_Title_Screen.png" width="800">
 <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/itech8_Gameplay.png" width="800">
 
-The table lists every game MAME runs on Incredible Technologies' 8-bit
-hardware: the bowling games in its `capbowl` driver, the rest in its
-`itech8` driver. This core implements three of the boards: the 68000
-board, which only Ninja Clowns uses, the earlier bowling board ¹, and the
-6809 blitter board ², for every planned game on it. Three games are not
-planned ³.
 
+## Games playable
 | Game | Year | Main CPU | Status |
 |---|---|---|---|
 | **Arlington Horse Racing** (v1.40-D, v1.21-D, v1.21-I) | 1991 | 6809 ² | **Playable, with sound** |
