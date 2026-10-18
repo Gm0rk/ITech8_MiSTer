@@ -40,7 +40,6 @@ planned ³.
 | **Arlington Horse Racing** (v1.40-D, v1.21-D, v1.21-I) | 1991 | 6809 ² | **Playable, with sound** |
 | **Bowl-O-Rama** | 1991 | 6809 ¹ | **Playable, with sound** |
 | **Capcom Bowling** (sets 1-4), **Coors Light Bowling** | 1988-89 | 6809 ¹ | **Playable, with sound** |
-| Dyno Bop (v1.1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 | **Golden Par Golf** (joystick v1.1, v1.0) | 1991-92 | 6809 ² | **Playable, with sound** |
 | **Golden Tee Golf** (joystick v3.3, v3.1; trackball v2.1, v2.0, v1.0) | 1989-90 | 6809 ² | **Playable, with sound** |
 | **Golden Tee Golf II** (trackball v2.2, v1.1; joystick v1.0) | 1989-92 | 6809 ² | **Playable, with sound** |
@@ -51,10 +50,15 @@ planned ³.
 | **Peggle** (joystick, trackball) | 1991 | 6809 ² | **Playable, with sound** |
 | **Poker Dice** (v1.7) | 1991 | 6809 ² | **Playable, with sound** |
 | **Rim Rockin' Basketball** (v2.2, v2.0, v1.6, v1.5, v1.2, v1.2 bootleg) | 1991 | HD6309 ² | **Playable, with sound** |
-| Slick Shot (v2.2, v1.7, v1.6) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 | **Strata Bowling** (V3, V1) | 1990 | 6809 ² | **Playable, with sound** |
-| Super Strike Bowling (v1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 | **Wheel Of Fortune** (sets 1, 2) | 1989 | 6809 ² | **Playable, with sound** |
+
+## Games not planned because of unique physical controls
+| Game | Year | Main CPU | Status |
+|---|---|---|---|
+| Dyno Bop (v1.1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
+| Slick Shot (v2.2, v1.7, v1.6) | 1990 | 6809, Z80 sensor board | Not planned ³ |
+| Super Strike Bowling (v1) | 1990 | 6809, Z80 sensor board | Not planned ³ |
 
 ¹ The earlier IT bowling board (MAME's `capbowl` driver): TMS34061 video
 with a 16-colour palette on every line but no ITV4400 blitter, a trackball,
@@ -86,28 +90,6 @@ the Strata Bowling v1 set built on Super Strike Bowling's board (MAME's
 `stratabs`). Their cabinets use their own physical controls, which a
 MiSTer setup is unlikely to reproduce well. MAME lists all three as
 mechanical games.
-
-## Progress
-
-```
-Ninja Clowns board    [##########]  10/10 sections working on hardware
-Bowling board         [########--]   8/10 sections confirmed on hardware
-6809 blitter board    [########--]   8/10 sections confirmed on hardware
-Games                 [##########]  15/15 added, 15 playable on hardware (3 not planned)
-```
-
-The Ninja Clowns board's ten sections are the 68000 and memory map, SDRAM
-and ROM loader, TMS34061, VRAM, blitter, RAMDAC, sound board, controls,
-NVRAM, and the MiSTer video path. The bowling board's are the main 6809 and
-memory map, SDRAM and ROM loader, TMS34061, VRAM and line palettes, turbo
-board, sound board, trackball and controls, NVRAM, watchdog, and the
-rotated video path. The 6809 blitter board's are the main 6809 and memory
-map, SDRAM and ROM loader, TMS34061, the display layouts, blitter, RAMDAC,
-sound boards, trackball and controls, NVRAM, and the rotated video path; its
-video section, RAMDAC, NVRAM and sound CPU are the Ninja Clowns board's.
-On the bowling board and the 6809 blitter board, NVRAM save and reload and
-the rotated picture are the two sections not yet confirmed. Design choices
-and their reasons are in `DECISIONS.md`.
 
 ## At a glance
 
