@@ -80,7 +80,7 @@ shows two layers of 16 colours each, whose palettes the board loads from
 the picture's own memory, and has a YM2608 sound board (FM music, drum
 sounds and ADPCM samples).
 
-³ Not planned for now: Dyno Bop, Slick Shot and Super Strike Bowling, and
+³ Not planned: Dyno Bop, Slick Shot and Super Strike Bowling, and
 the Strata Bowling v1 set built on Super Strike Bowling's board (MAME's
 `stratabs`). Their cabinets use their own physical controls, which a
 MiSTer setup is unlikely to reproduce well. MAME lists all three as
