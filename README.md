@@ -138,6 +138,18 @@ and bottom, and V-Shift chooses which end loses more. The vertical games are tur
 a horizontal screen through MiSTer's frame buffer, or left vertical for a
 rotated monitor.
 
+**Clocks.** Every board runs at its original speeds from one 48 MHz clock,
+which each of them divides exactly: the 68000 at 12 MHz, the HD6309 at 3
+MHz, the 6809s at 2 MHz, the YM2203 and YM3812 at 4 MHz, the YM2608 at 8
+MHz, the OKI M6295 at 1 MHz, and the dots at 8 MHz (6 MHz on the
+two-layer and one-page games of the 6809 blitter board, from that board's
+12 MHz crystal). So pixels are even and the line and frame rates are the
+boards' own: 15.69 kHz and 59.64 Hz (Ninja Clowns' screen layout and
+Grudge Match), 15.71 kHz and 59.72 Hz (the two-layer and one-page games),
+15.75-15.81 kHz and 60.1-60.6 Hz (the bowling board). The video output runs at
+96 MHz, twice that and from the same PLL, so CRT Adjust can step in finer
+amounts; with CRT Adjust off it passes each pixel through unchanged.
+
 ## Using the core
 
 ROMs are not included. Copy:
@@ -339,6 +351,11 @@ its SSG), and the YM2608's FM section and timers (JT12).
 
 **[MiSTer-CRT-Adjust](https://github.com/rmonic79/MiSTer-CRT-Adjust)** by
 Umberto Parisi (**rmonic79**): CRT geometry adjustment.
+
+**[MiSTer-CoreSkill](https://github.com/ppriest/MiSTer-CoreSkill)** by
+**ppriest**: its clock planning guide,
+[`clocks.md`](https://github.com/ppriest/MiSTer-CoreSkill/blob/main/mister-arcade-core/references/clocks.md),
+which the core's clocks were checked against.
 
 **[MiSTer](https://github.com/MiSTer-devel/Main_MiSTer)** and
 [`Template_MiSTer`](https://github.com/MiSTer-devel/Template_MiSTer) by
