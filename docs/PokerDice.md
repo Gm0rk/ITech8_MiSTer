@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Poker_Dice.png" width="400" alt="Poker Dice title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Poker_Dice_2.png" width="400" alt="Poker Dice gameplay">
-
 | | |
 |---|---|
 | Sets | `pokrdice` (v1.7; main MRA) |
