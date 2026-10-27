@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Neck-N-Neck.png" width="400" alt="Neck-N-Neck title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Neck-N-Neck_2.png" width="400" alt="Neck-N-Neck gameplay">
+
 | | |
 |---|---|
 | Sets | `neckneck` (v1.2; main MRA) |
