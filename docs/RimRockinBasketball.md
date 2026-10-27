@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Rim_Rockin_Basketball.png" width="400" alt="Rim Rockin' Basketball title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Rim_Rockin_Basketball_2.png" width="400" alt="Rim Rockin' Basketball gameplay">
+
 | | |
 |---|---|
 | Sets | `rimrockn` (v2.2; main MRA); `rimrockn12` (v1.2); `rimrockn12b` (v1.2, bootleg); `rimrockn15` (v1.5); `rimrockn16` (v1.6); `rimrockn20` (v2.0) |
