@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Golden_Par_Golf.png" width="400" alt="Golden Par Golf title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Golden_Par_Golf_2.png" width="400" alt="Golden Par Golf gameplay">
-
 | | |
 |---|---|
 | Sets | `gpgolf` (Joystick, v1.1; main MRA); `gpgolfa` (Joystick, v1.0) |
