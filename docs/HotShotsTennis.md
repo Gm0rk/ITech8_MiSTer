@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Hot_Shots_Tennis.png" width="400" alt="Hot Shots Tennis title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Hot_Shots_Tennis_2.png" width="400" alt="Hot Shots Tennis gameplay">
+
 | | |
 |---|---|
 | Sets | `hstennis` (v1.1; main MRA); `hstennis10` (v1.0) |
