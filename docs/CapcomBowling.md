@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Capcom_Bowling.png" width="400" alt="Capcom Bowling and Coors Light Bowling title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Capcom_Bowling_2.png" width="400" alt="Capcom Bowling and Coors Light Bowling gameplay">
+
 | | |
 |---|---|
 | Sets | `capbowl` (set 1; main MRA); `capbowl2` (set 2); `capbowl3` (set 3); `capbowl4` (set 4); `clbowl` (Coors Light Bowling) |
