@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Grudge_Match.png" width="400" alt="Grudge Match title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Grudge_Match_2.png" width="400" alt="Grudge Match gameplay">
+
 | | |
 |---|---|
 | Sets | `grmatch` (Yankee Game Technology; main MRA) |
