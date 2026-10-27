@@ -1,6 +1,6 @@
 # Incredible Technologies 8-bit hardware for MiSTer FPGA
 
-A work-in-progress FPGA core for Incredible Technologies' (Strata) **8-bit
+A FPGA core for Incredible Technologies' (Strata) **8-bit
 blitter** arcade hardware, for the [MiSTer](https://github.com/MiSTer-devel)
 platform. It is built on `Template_MiSTer` with rmonic79's CRT Adjust built
 in. **Ninja Clowns** (1991) boots and is fully playable. Capcom Bowling,
@@ -12,11 +12,8 @@ it: **Golden Tee Golf**, **Golden Tee Golf II**, **Golden Par Golf**,
 Horse Racing**, **Peggle**, **Neck-N-Neck**, **Rim Rockin' Basketball**
 and **Grudge Match**.
 
-> **This core was made with AI.** The RTL and documentation were written in
-> collaboration with an AI assistant (Claude, by Anthropic).
-> It worked from MAME's source and from a disassembly of the game's own
-> program ROMs.  This is disclosed here
-> so you can make your decision to use this core accordingly.
+> **AI disclosure:** this core was developed using AI and MAME as a reference.
+> (Claude, by Anthropic - Opus 5.5 & Sonnet 5.5).
 
 Add to your downloader.ini
 ```
