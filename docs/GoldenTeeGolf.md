@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Golden_Tee_Golf.png" width="400" alt="Golden Tee Golf title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Golden_Tee_Golf_2.png" width="400" alt="Golden Tee Golf gameplay">
-
 | | |
 |---|---|
 | Sets | `gtg` (Joystick, v3.3; main MRA); `gtgj31` (Joystick, v3.1); `gtgt10` (Trackball, v1.0); `gtgt20` (Trackball, v2.0); `gtgt21` (Trackball, v2.1) |
