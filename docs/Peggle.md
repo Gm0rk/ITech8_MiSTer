@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Peggle.png" width="400" alt="Peggle title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Peggle_2.png" width="400" alt="Peggle gameplay">
+
 | | |
 |---|---|
 | Sets | `peggle` (Joystick, v1.0; main MRA); `pegglet` (Trackball, v1.0) |
