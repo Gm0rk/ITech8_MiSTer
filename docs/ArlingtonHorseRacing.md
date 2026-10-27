@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Arlington_Horse_Racing.png" width="400" alt="Arlington Horse Racing title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Arlington_Horse_Racing_2.png" width="400" alt="Arlington Horse Racing gameplay">
-
 | | |
 |---|---|
 | Sets | `arlingtn` (v1.40-D; main MRA); `arlingtna` (v1.21-D); `arlingtni` (v1.21-I) |
