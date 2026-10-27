@@ -2,6 +2,8 @@
 
 [Back to the main README](../README.md)
 
+<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Golden_Tee_Golf_II.png" width="400" alt="Golden Tee Golf II title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Golden_Tee_Golf_II_2.png" width="400" alt="Golden Tee Golf II gameplay">
+
 | | |
 |---|---|
 | Sets | `gtg2` (Trackball, v2.2; main MRA); `gtg2j` (Joystick, v1.0); `gtg2t` (Trackball, v1.1) |
