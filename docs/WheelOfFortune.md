@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Wheel_Of_Fortune.png" width="400" alt="Wheel Of Fortune title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Wheel_Of_Fortune_2.png" width="400" alt="Wheel Of Fortune gameplay">
-
 | | |
 |---|---|
 | Sets | `wfortune` (set 1; main MRA); `wfortunea` (set 2) |
