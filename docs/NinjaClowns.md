@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Ninja_Clowns.png" width="400" alt="Ninja Clowns title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Ninja_Clowns_2.png" width="400" alt="Ninja Clowns gameplay">
-
 | | |
 |---|---|
 | Sets | `ninclown` (27 oct 91; main MRA) |
