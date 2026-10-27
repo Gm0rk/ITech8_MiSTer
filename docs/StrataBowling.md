@@ -2,8 +2,6 @@
 
 [Back to the main README](../README.md)
 
-<img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Strata_Bowling.png" width="400" alt="Strata Bowling title screen"> <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Strata_Bowling_2.png" width="400" alt="Strata Bowling gameplay">
-
 | | |
 |---|---|
 | Sets | `stratab` (V3; main MRA); `stratab1` (V1) |
