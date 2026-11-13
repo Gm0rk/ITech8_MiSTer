@@ -1,7 +1,7 @@
 # ===========================================================================
 #  files.qip -- Incredible Technologies 8-bit hardware for MiSTer
 #
-#  Sourced by Arcade-ITech8.qsf (and the debug revision), not added as a
+#  Sourced by Arcade-ITech8.qsf, not added as a
 #  QIP_FILE, so every path is relative to the project root.
 #
 #  rtl/ is organised by section of the board set:
@@ -12,9 +12,9 @@
 #                  Vertical Flip frame buffer
 #      sound/      the external YM3812 sound board: 6809 glue, 6522 VIA
 #      mem/        FPGA side only: block RAM templates, SDRAM, ROM loader
-#      debug/      the diagnostic overlay: Board, Trackball and Analog pages
-#                  (debug revision); it8_dbg_page also draws the trackball
-#                  calibration's page in both
+#      debug/      the diagnostic overlay's pages (built only with IT8_DEBUG,
+#                  which no project revision defines since build 031d);
+#                  it8_dbg_page also draws the trackball calibration's page
 #      cb/         the earlier Capcom Bowling board (also Coors Light
 #                  Bowling and Bowl-O-Rama): main board, video, sound board,
 #                  trackball and its calibration (every trackball game)
