@@ -35,9 +35,6 @@ output runs at 96 MHz from the same PLL. All games use 2 MB of SDRAM or less.
 
 ## Games
 
-Each game has its own page in [`docs`](docs) with its versions, controls and
-game-specific features.
-
 | Game | Main set | Title Screen | Gameplay |
 |---|---|---|---|
 | [Arlington Horse Racing](docs/ArlingtonHorseRacing.md) | arlingtn (v1.40-D) | <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Arlington_Horse_Racing.png" width="300" alt="Arlington Horse Racing title screen"> | <img src="https://github.com/Gm0rk/ITech8_MiSTer/blob/main/media/Arlington_Horse_Racing_2.png" width="300" alt="Arlington Horse Racing gameplay"> |
@@ -73,7 +70,6 @@ The other versions and clones are in `mra/_alternatives`.
 - Trackball presets and Calibrate trackball: three throws or swings as hard
   as in play set the gain to match the game (the bowling games and the golf
   trackball sets)
-- NVRAM saved to the SD card: settings, audits and high scores
 
 ## ROMs
 
