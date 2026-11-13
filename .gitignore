@@ -49,6 +49,7 @@ c5_pin_model_dump.txt
 /DECISIONS.md
 /COMMIT.md
 /PROGRESS.md
+/CHANGELOG.md
 /sim/
 __pycache__/
 *.pyc
