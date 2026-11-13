@@ -1,9 +1,7 @@
 # --------------------------------------------------------------------------
 #
 # MiSTer project: Incredible Technologies 8-bit hardware (Ninja Clowns)
-# Production revision. Arcade-ITech8_debug.qsf is the same build plus the
-# Debug OSD page and diagnostic overlay (IT8_DEBUG), without the release
-# script.
+# Production revision.
 #
 # WARNING WARNING WARNING:
 # Do not add files to project in Quartus IDE! It will mess this file!
