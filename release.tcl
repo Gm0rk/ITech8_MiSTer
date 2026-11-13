@@ -5,8 +5,7 @@
 # After a successful compilation of the production revision, renames
 # output_files/Arcade-ITech8.rbf to Arcade-ITech8_YYYYMMDD.rbf (the local
 # date) and moves it to releases/. A second build on the same day replaces
-# that day's file. The debug revision (Arcade-ITech8_debug) is left alone:
-# its core stays in output_files/.
+# that day's file.
 #
 # Hooked up in Arcade-ITech8.qsf only:
 #   set_global_assignment -name POST_FLOW_SCRIPT_FILE "quartus_sh:release.tcl"
